@@ -1,0 +1,76 @@
+{
+  "version": "1.1.0",
+  "project": "Hernest - Assistant Agentique Modulaire Local-First (Sans Démon)",
+  "invariants": [
+    {
+      "id": "INV-01-SCHEMA-SQLITE",
+      "statement": "La base SQLite contient exactement les 6 tables requises : app_settings, tools, memories, scheduled_tasks, runs, run_traces avec leurs contraintes et index.",
+      "component": "persistence/db",
+      "executable_probe": "python -c \"import sqlite3, os; conn=sqlite3.connect(os.path.expanduser('~/.local/share/agent-manager/data.db')); tables = [r[0] for r in conn.execute(\\\"SELECT name FROM sqlite_master WHERE type='table'\\\").fetchall()]; expected = {'app_settings', 'tools', 'memories', 'scheduled_tasks', 'runs', 'run_traces'}; missing = expected - set(tables); assert not missing, f'Missing tables: {missing}'; print('OK')\"",
+      "expected_output": "OK"
+    },
+    {
+      "id": "INV-02-NO-DAEMON",
+      "statement": "Le runner CLI s'exécute en mode run-to-completion et se termine proprement avec exit code 0 sans laisser de thread d'écoute, serveur de fond ou boucle infinie.",
+      "component": "cli/runner",
+      "executable_probe": "python -m hernest.cli run --prompt \"test prompt\" --project \"d:\\Projet\\Hernest\" --test-dry-run",
+      "expected_output": "EXIT_0"
+    },
+    {
+      "id": "INV-03-CORE-TOOLS-SCHEMA",
+      "statement": "Les primitives système fondamentales (store_memory, recall_memory, sandbox_exec, register_tool, terminal_exec, web_fetch) sont définies, exposent un schéma JSON valide et sont disponibles pour le LLM.",
+      "component": "core/tools",
+      "executable_probe": "python -c \"from hernest.tools.primitives import get_primitive_tools; tools = get_primitive_tools(); names = {t['name'] for t in tools}; expected = {'store_memory', 'recall_memory', 'sandbox_exec', 'register_tool', 'terminal_exec', 'web_fetch'}; assert expected.issubset(names); print('OK')\"",
+      "expected_output": "OK"
+    },
+    {
+      "id": "INV-04-STORE-RECALL-MEMORY-ISOLATION",
+      "statement": "store_memory et recall_memory séparent strictement les mémoires par project_id et respectent le scope (session vs project).",
+      "component": "core/tools/memory",
+      "executable_probe": "python -m pytest tests/test_memory_primitives.py -q",
+      "expected_output": "passed"
+    },
+    {
+      "id": "INV-05-SANDBOX-EXECUTION",
+      "statement": "sandbox_exec exécute du code isolé pour les runtimes requis (python, bash/powershell/cmd sous windows, node) avec timeout strict et sans dérivation silencieuse.",
+      "component": "core/tools/sandbox",
+      "executable_probe": "python -m pytest tests/test_sandbox.py -q",
+      "expected_output": "passed"
+    },
+    {
+      "id": "INV-06-REGISTER-TOOL-PERSISTENCE",
+      "statement": "register_tool enregistre un outil dans la table tools et le rend exécutable pour les futures sessions sans modification manuelle.",
+      "component": "core/tools/registry",
+      "executable_probe": "python -m pytest tests/test_tool_registration.py -q",
+      "expected_output": "passed"
+    },
+    {
+      "id": "INV-07-EXPLICIT-FAILURE",
+      "statement": "En cas d'échec LLM, de timeout sandbox ou d'erreur SQL, le runner remonte une erreur explicite sans avaler silencieusement l'exception ni renvoyer une valeur fictive inventée.",
+      "component": "engine/react",
+      "executable_probe": "python -m pytest tests/test_explicit_failure.py -q",
+      "expected_output": "passed"
+    },
+    {
+      "id": "INV-08-NO-UNAUTHORIZED-EXTERNAL-PROCESS",
+      "statement": "Aucun processus externe ni appel réseau non documenté n'est exécuté en dehors de l'appel LLM configuré (Ollama/OpenAI compatible), des outils documentés (sandbox_exec, terminal_exec sécurisé, web_fetch, web_search, client MCP) ou de schtasks/cron.",
+      "component": "security/probe",
+      "executable_probe": "python -c \"import re, glob; patterns = [r'subprocess\\.Popen', r'subprocess\\.run', r'os\\.system', r'requests\\.', r'urllib\\.']; files = [f for f in glob.glob('hernest/**/*.py', recursive=True) if 'sandbox' not in f and 'os_scheduler' not in f and 'llm' not in f and 'terminal' not in f and 'web' not in f and 'search' not in f and 'mcp' not in f]; violations = [(f, p) for f in files for p in patterns if re.search(p, open(f, 'r', encoding='utf-8').read())]; assert not violations, f'Violations found: {violations}'; print('CLEAN')\"",
+      "expected_output": "CLEAN"
+    },
+    {
+      "id": "INV-09-ZERO-BUILD-VANILLA-UI",
+      "statement": "L'UI web est strictement en Vanilla JS/CSS sans bundler, sans dépendance NPM de build, et implémente les 4 Custom Elements requis (<run-console>, <memory-grid>, <task-planner>, <settings-view>).",
+      "component": "ui",
+      "executable_probe": "python -c \"import os; assert os.path.exists('ui/index.html') and os.path.exists('ui/js/components/run-console.js') and os.path.exists('ui/js/components/memory-grid.js') and os.path.exists('ui/js/components/task-planner.js') and os.path.exists('ui/js/components/settings-view.js') and not os.path.exists('ui/package.json'); print('VANILLA_OK')\"",
+      "expected_output": "VANILLA_OK"
+    },
+    {
+      "id": "INV-10-OS-SCHEDULER-DELEGATION",
+      "statement": "La synchronisation des tâches planifiées délègue nativement à l'OS (schtasks sous Windows, cron/crontab sous Unix) sans aucun démon applicatif résident de planification.",
+      "component": "scheduler/os",
+      "executable_probe": "python -m pytest tests/test_os_scheduler.py -q",
+      "expected_output": "passed"
+    }
+  ]
+}
