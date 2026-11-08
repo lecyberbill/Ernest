@@ -1,0 +1,677 @@
+pub mod assets;
+
+use std::sync::Arc;
+use std::thread;
+use std::path::{Path, PathBuf};
+use std::fs;
+use tiny_http::{Server, Response, Header, Method};
+use serde_json::Value;
+
+use assets::Asset;
+use crate::db::connection::{get_connection, init_db};
+use crate::db::memories::MemoryService;
+use crate::llm::router::LLMRouter;
+use crate::engine::react::ReActEngine;
+use crate::tools::get_ide_tools_schemas;
+use crate::tools::fs::{read_file, write_file, edit_file, rename_file_or_dir, delete_file_or_dir, create_directory};
+use crate::tools::search::{grep_search, list_files, list_directory_entries};
+use crate::tools::terminal::execute_terminal;
+use crate::tools::git::{get_git_status, get_git_diff, git_commit};
+use crate::tools::diagnostics::run_project_diagnostics;
+
+pub fn start_http_server(host: &str, port: u16) {
+    let addr = format!("{}:{}", host, port);
+    let server = Arc::new(Server::http(&addr).expect("Impossible de lier le serveur Hernest IDE"));
+    println!("🦀 Hernest IDE Server actif sur http://{}", addr);
+
+    init_db(None).ok();
+
+    for _ in 0..4 {
+        let server = server.clone();
+        thread::spawn(move || {
+            for req in server.incoming_requests() {
+                handle_request(req);
+            }
+        });
+    }
+
+    loop {
+        thread::park();
+    }
+}
+
+fn parse_query(url: &str) -> (String, std::collections::HashMap<String, String>) {
+    let mut parts = url.splitn(2, '?');
+    let path = parts.next().unwrap_or("/").to_string();
+    let mut map = std::collections::HashMap::new();
+    if let Some(q) = parts.next() {
+        for pair in q.split('&') {
+            let mut kv = pair.splitn(2, '=');
+            if let Some(k) = kv.next() {
+                let v = kv.next().unwrap_or("");
+                map.insert(k.to_string(), url_decode(v));
+            }
+        }
+    }
+    (path, map)
+}
+
+fn url_decode(s: &str) -> String {
+    let mut bytes = Vec::new();
+    let mut chars = s.bytes();
+    while let Some(b) = chars.next() {
+        if b == b'%' {
+            if let (Some(h1), Some(h2)) = (chars.next(), chars.next()) {
+                if let Ok(val) = u8::from_str_radix(&format!("{}{}", h1 as char, h2 as char), 16) {
+                    bytes.push(val);
+                }
+            }
+        } else if b == b'+' {
+            bytes.push(b' ');
+        } else {
+            bytes.push(b);
+        }
+    }
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+fn handle_request(mut req: tiny_http::Request) {
+    let raw_url = req.url().to_string();
+    let (path, query) = parse_query(&raw_url);
+
+    let json_header = Header::from_bytes(&b"Content-Type"[..], &b"application/json; charset=utf-8"[..]).unwrap();
+    let cors_header = Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap();
+    let cors_methods = Header::from_bytes(&b"Access-Control-Allow-Methods"[..], &b"GET, POST, OPTIONS"[..]).unwrap();
+    let cors_headers = Header::from_bytes(&b"Access-Control-Allow-Headers"[..], &b"Content-Type"[..]).unwrap();
+
+    let method = req.method().clone();
+
+    if method == Method::Options {
+        let resp = Response::empty(204)
+            .with_header(cors_header)
+            .with_header(cors_methods)
+            .with_header(cors_headers);
+        req.respond(resp).ok();
+        return;
+    }
+
+    // 1. ENDPOINTS GET
+    if method == Method::Get {
+        if path == "/api/ide/tree" {
+            let root = query.get("root").map(|s| s.as_str()).unwrap_or(".");
+            match list_directory_entries(root) {
+                Ok(val) => {
+                    let resp = Response::from_string(val.to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"error": e}).to_string()).with_status_code(400).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        if path == "/api/ide/all_files" {
+            let root = query.get("root").map(|s| s.as_str()).unwrap_or(".");
+            match list_files(root, Some(8)) {
+                Ok(val) => {
+                    let resp = Response::from_string(val.to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"error": e}).to_string()).with_status_code(400).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        if path == "/api/ide/git/status" {
+            let root = query.get("root").map(|s| s.as_str()).unwrap_or(".");
+            match get_git_status(root) {
+                Ok(val) => {
+                    let resp = Response::from_string(val.to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"error": e}).to_string()).with_status_code(400).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        if path == "/api/ide/git/diff" {
+            let root = query.get("root").map(|s| s.as_str()).unwrap_or(".");
+            let file = query.get("file").map(|s| s.as_str());
+            match get_git_diff(root, file) {
+                Ok(val) => {
+                    let resp = Response::from_string(val.to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"error": e}).to_string()).with_status_code(400).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        if path == "/api/ide/diagnostics" {
+            let root = query.get("root").map(|s| s.as_str()).unwrap_or(".");
+            match run_project_diagnostics(root) {
+                Ok(val) => {
+                    let resp = Response::from_string(val.to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"error": e}).to_string()).with_status_code(400).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        if path == "/api/ide/file" {
+            let file_path = query.get("path").map(|s| s.as_str()).unwrap_or("");
+            let p = std::path::Path::new(file_path);
+            if let Ok(metadata) = std::fs::metadata(p) {
+                // Plafond de 10 Mo pour éviter de saturer la mémoire du navigateur sur gros binaires/fichiers
+                if metadata.len() > 10 * 1024 * 1024 {
+                    let resp = Response::from_string(serde_json::json!({
+                        "error": format!("Fichier trop volumineux ({:.2} Mo). La limite d'édition directe est de 10 Mo.", metadata.len() as f64 / 1_048_576.0)
+                    }).to_string()).with_status_code(413).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                    return;
+                }
+            }
+            match std::fs::read_to_string(file_path) {
+                Ok(content) => {
+                    let resp = Response::from_string(serde_json::json!({"path": file_path, "content": content}).to_string())
+                        .with_header(json_header)
+                        .with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"error": e.to_string()}).to_string())
+                        .with_status_code(404)
+                        .with_header(json_header)
+                        .with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        if path == "/api/ide/tools" {
+            let tools = get_ide_tools_schemas();
+            let resp = Response::from_string(serde_json::json!(tools).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/ide/models" {
+            let conn = get_connection(None).unwrap();
+            let mut list = Vec::new();
+            if let Ok(mut stmt) = conn.prepare("SELECT id, name, provider_type, base_url, model, (api_key IS NOT NULL AND api_key != '') as has_key, is_enabled, priority FROM model_providers ORDER BY priority ASC, created_at ASC") {
+                if let Ok(rows) = stmt.query_map([], |row| {
+                    Ok(serde_json::json!({
+                        "id": row.get::<_, String>(0)?,
+                        "name": row.get::<_, String>(1)?,
+                        "provider_type": row.get::<_, String>(2)?,
+                        "base_url": row.get::<_, String>(3)?,
+                        "model": row.get::<_, String>(4)?,
+                        "has_key": row.get::<_, i32>(5)? == 1,
+                        "is_enabled": row.get::<_, i32>(6)? == 1,
+                        "priority": row.get::<_, i32>(7)?
+                    }))
+                }) {
+                    for r in rows.flatten() {
+                        list.push(r);
+                    }
+                }
+            }
+            let resp = Response::from_string(serde_json::json!(list).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/ide/memories" {
+            let conn = get_connection(None).unwrap();
+            let project = query.get("project").map(|s| s.as_str()).unwrap_or("hernest_ide");
+            let mem = MemoryService::new(&conn);
+            let items = mem.list_memories(project).unwrap_or_default();
+            let resp = Response::from_string(serde_json::json!(items).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/ide/history" {
+            let conn = get_connection(None).unwrap();
+            let project = query.get("project").map(|s| s.as_str()).unwrap_or("hernest_ide");
+            let mut list = Vec::new();
+            if let Ok(mut stmt) = conn.prepare("SELECT id, prompt, status, model, total_tokens, duration_ms, created_at FROM runs WHERE project_id = ? ORDER BY id DESC LIMIT 20") {
+                if let Ok(rows) = stmt.query_map([project], |row| {
+                    Ok(serde_json::json!({
+                        "id": row.get::<_, String>(0)?,
+                        "prompt": row.get::<_, String>(1)?,
+                        "status": row.get::<_, String>(2)?,
+                        "model": row.get::<_, String>(3)?,
+                        "total_tokens": row.get::<_, Option<i64>>(4)?.unwrap_or(0),
+                        "duration_ms": row.get::<_, Option<i64>>(5)?.unwrap_or(0),
+                        "created_at": row.get::<_, Option<String>>(6)?.unwrap_or_default()
+                    }))
+                }) {
+                    for r in rows.flatten() {
+                        list.push(r);
+                    }
+                }
+            }
+            let resp = Response::from_string(serde_json::json!(list).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/ide/settings" {
+            let conn = get_connection(None).unwrap();
+            let conn = get_connection(None).unwrap();
+            let mut map = serde_json::Map::new();
+            if let Ok(mut stmt) = conn.prepare("SELECT key, value, is_secret FROM app_settings") {
+                if let Ok(rows) = stmt.query_map([], |row| {
+                    let k: String = row.get(0)?;
+                    let v: String = row.get(1)?;
+                    let is_sec: i32 = row.get(2)?;
+                    Ok((k, v, is_sec))
+                }) {
+                    for r in rows.flatten() {
+                        let val = if r.2 == 1 { "***".to_string() } else { r.1 };
+                        map.insert(r.0, Value::String(val));
+                    }
+                }
+            }
+            let resp = Response::from_string(Value::Object(map).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+    }
+
+    // 2. ENDPOINTS POST
+    if method == Method::Post {
+        let mut body = String::new();
+        req.as_reader().read_to_string(&mut body).ok();
+        let payload: Value = serde_json::from_str(&body).unwrap_or(serde_json::json!({}));
+
+        if path == "/api/ide/save_file" {
+            let file_path = payload["path"].as_str().unwrap_or("");
+            let content = payload["content"].as_str().unwrap_or("");
+            match write_file(file_path, content) {
+                Ok(res) => {
+                    let resp = Response::from_string(res.to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"error": e}).to_string()).with_status_code(500).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        if path == "/api/ide/rename" {
+            let old_path = payload["old_path"].as_str().unwrap_or("");
+            let new_path = payload["new_path"].as_str().unwrap_or("");
+            match rename_file_or_dir(old_path, new_path) {
+                Ok(res) => {
+                    let resp = Response::from_string(res.to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"error": e}).to_string()).with_status_code(400).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        if path == "/api/ide/delete" {
+            let file_path = payload["path"].as_str().unwrap_or("");
+            match delete_file_or_dir(file_path) {
+                Ok(res) => {
+                    let resp = Response::from_string(res.to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"error": e}).to_string()).with_status_code(400).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        if path == "/api/ide/create_item" {
+            let file_path = payload["path"].as_str().unwrap_or("");
+            let is_dir = payload["is_dir"].as_bool().unwrap_or(false);
+            let res = if is_dir {
+                create_directory(file_path)
+            } else {
+                write_file(file_path, "")
+            };
+            match res {
+                Ok(r) => {
+                    let resp = Response::from_string(r.to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"error": e}).to_string()).with_status_code(400).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        if path == "/api/ide/git/commit" {
+            let root = payload["root"].as_str().unwrap_or(".");
+            let message = payload["message"].as_str().unwrap_or("Mise à jour Hernest IDE");
+            match git_commit(root, message) {
+                Ok(val) => {
+                    let resp = Response::from_string(val.to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"error": e}).to_string()).with_status_code(400).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        if path == "/api/ide/ai/inline_edit" {
+            let prompt = payload["prompt"].as_str().unwrap_or("");
+            let file_path = payload["file_path"].as_str().unwrap_or("");
+            let selected_code = payload["selected_code"].as_str().unwrap_or("");
+            let entire_content = payload["entire_content"].as_str().unwrap_or("");
+
+            let conn = match get_connection(None) {
+                Ok(c) => c,
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"error": e.to_string()}).to_string()).with_status_code(500).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                    return;
+                }
+            };
+            let router = LLMRouter::from_db(&conn);
+
+            let sys_prompt = "Tu es un assistant de transformation de code ultra-précis (style Cursor Ctrl+K). \
+L'utilisateur te donne un extrait de code sélectionné et une consigne d'édition. \
+Tu dois retourner UNIQUEMENT le bloc de code modifié qui remplacera la sélection, SANS explications, SANS markdown ``` ou balises de code autour. \
+Garde l'indentation appropriée.";
+
+            let user_msg = format!(
+                "Fichier : {}\nInstruction : {}\nCode sélectionné à modifier :\n{}\n\nContexte global du fichier :\n{}",
+                file_path, prompt, selected_code, entire_content
+            );
+
+            let messages = vec![
+                crate::llm::client::ChatMessage { role: "system".to_string(), content: sys_prompt.to_string(), images: None },
+                crate::llm::client::ChatMessage { role: "user".to_string(), content: user_msg, images: None },
+            ];
+
+            match router.chat_completion_with_fallback(&messages, None) {
+                Ok((res, backend)) => {
+                    let clean_replacement = res.content.trim_matches('`').trim();
+                    let resp = Response::from_string(serde_json::json!({
+                        "status": "success",
+                        "replacement": clean_replacement,
+                        "backend": backend
+                    }).to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"error": e.to_string()}).to_string()).with_status_code(500).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        if path == "/api/ide/model_providers" {
+            let conn = get_connection(None).unwrap();
+            let p_id = payload["id"].as_str().map(|s| s.to_string()).unwrap_or_else(|| format!("provider_{}", &uuid::Uuid::new_v4().to_string().replace('-', "")[..8]));
+            let name = payload["name"].as_str().unwrap_or("Nouveau Modèle");
+            let provider_type = payload["provider_type"].as_str().unwrap_or("openai");
+            let base_url = payload["base_url"].as_str().unwrap_or("http://127.0.0.1:1234").trim_end_matches('/');
+            let model = payload["model"].as_str().unwrap_or("default");
+            let raw_key = payload["api_key"].as_str();
+            let is_enabled = if payload["is_enabled"].as_bool().unwrap_or(true) { 1 } else { 0 };
+
+            conn.execute(
+                "INSERT INTO model_providers (id, name, provider_type, base_url, model, api_key, is_enabled, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET name=excluded.name, provider_type=excluded.provider_type, base_url=excluded.base_url, model=excluded.model, api_key=COALESCE(excluded.api_key, model_providers.api_key), is_enabled=excluded.is_enabled, updated_at=CURRENT_TIMESTAMP",
+                rusqlite::params![p_id, name, provider_type, base_url, model, raw_key, is_enabled],
+            ).ok();
+
+            let resp = Response::from_string(serde_json::json!({"status": "saved", "id": p_id}).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/ide/model_providers/toggle" {
+            let conn = get_connection(None).unwrap();
+            let p_id = payload["id"].as_str().unwrap_or("");
+            let mut new_val = 1;
+            if let Ok(curr) = conn.query_row("SELECT is_enabled FROM model_providers WHERE id = ?", [p_id], |r| r.get::<_, i32>(0)) {
+                new_val = if curr == 1 { 0 } else { 1 };
+                conn.execute("UPDATE model_providers SET is_enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", rusqlite::params![new_val, p_id]).ok();
+            }
+            let resp = Response::from_string(serde_json::json!({"status": "updated", "id": p_id, "is_enabled": new_val == 1}).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/ide/model_providers/delete" {
+            let conn = get_connection(None).unwrap();
+            let p_id = payload["id"].as_str().unwrap_or("");
+            conn.execute("DELETE FROM model_providers WHERE id = ?", [p_id]).ok();
+            let resp = Response::from_string(serde_json::json!({"status": "deleted", "id": p_id}).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/ide/settings" {
+            let conn = get_connection(None).unwrap();
+            if let Some(obj) = payload.as_object() {
+                for (k, v) in obj {
+                    let str_val = v.as_str().map(|s| s.to_string()).unwrap_or_else(|| v.to_string());
+                    let is_sec = if k.to_lowercase().contains("key") || k.to_lowercase().contains("secret") || k.to_lowercase().contains("token") { 1 } else { 0 };
+                    conn.execute(
+                        "INSERT INTO app_settings (key, value, is_secret, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=CURRENT_TIMESTAMP",
+                        rusqlite::params![k, str_val, is_sec],
+                    ).ok();
+                }
+            }
+            let resp = Response::from_string(serde_json::json!({"status": "ok"}).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/ide/terminal" {
+            let cmd = payload["command"].as_str().unwrap_or("");
+            let timeout = payload["timeout_secs"].as_u64().unwrap_or(30);
+            match execute_terminal(cmd, timeout) {
+                Ok(res) => {
+                    let resp = Response::from_string(res.to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"error": e, "status": "error"}).to_string()).with_status_code(400).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        if path == "/api/ide/grep" {
+            let query = payload["query"].as_str().unwrap_or("");
+            let root = payload["root"].as_str().unwrap_or(".");
+            match grep_search(root, query, Some(50)) {
+                Ok(res) => {
+                    let resp = Response::from_string(res.to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"error": e}).to_string()).with_status_code(400).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        // Exécution de l'agent de programmation en flux SSE
+        if path == "/api/ide/run/stream" {
+            let prompt = payload["prompt"].as_str().unwrap_or("").to_string();
+            let project = payload["project"].as_str().unwrap_or("hernest_ide_workspace").to_string();
+
+            let sse_header = Header::from_bytes(&b"Content-Type"[..], &b"text/event-stream"[..]).unwrap();
+            let cache_header = Header::from_bytes(&b"Cache-Control"[..], &b"no-cache"[..]).unwrap();
+            let conn_header = Header::from_bytes(&b"Connection"[..], &b"keep-alive"[..]).unwrap();
+
+            let (reader, mut writer) = match std::io::pipe() {
+                Ok(p) => p,
+                Err(_) => {
+                    req.respond(Response::empty(500)).ok();
+                    return;
+                }
+            };
+            let resp = Response::empty(200)
+                .with_data(reader, None)
+                .with_header(sse_header)
+                .with_header(cache_header)
+                .with_header(conn_header)
+                .with_header(cors_header);
+
+            thread::spawn(move || {
+                use std::io::Write;
+                let conn = match get_connection(None) {
+                    Ok(c) => c,
+                    Err(_) => return,
+                };
+                let router = LLMRouter::from_db(&conn);
+                let engine = ReActEngine::new(&conn, &router, &project);
+
+                let _ = writeln!(writer, "event: init\ndata: {}\n\n", serde_json::json!({"status": "started"}));
+                writer.flush().ok();
+
+                let res = engine.run_with_callback(&prompt, |r_id, step, s_type, t_name, pay, backend| {
+                    let trace_json = serde_json::json!({
+                        "run_id": r_id,
+                        "step": step,
+                        "step_type": s_type,
+                        "tool_name": t_name,
+                        "payload": pay,
+                        "backend": backend
+                    });
+                    let _ = writeln!(writer, "event: trace\ndata: {}\n\n", trace_json);
+                    writer.flush().ok();
+                });
+
+                match res {
+                    Ok(r) => {
+                        let comp_json = serde_json::json!({
+                            "status": "completed",
+                            "run_id": r.run_id,
+                            "answer": r.answer,
+                            "tokens": r.total_tokens,
+                            "duration_ms": r.duration_ms
+                        });
+                        let _ = writeln!(writer, "event: completed\ndata: {}\n\n", comp_json);
+                    }
+                    Err(e) => {
+                        let _ = writeln!(writer, "event: error\ndata: {}\n\n", serde_json::json!({"error": e}));
+                    }
+                }
+                writer.flush().ok();
+            });
+
+            req.respond(resp).ok();
+            return;
+        }
+    }
+
+    // 3. FICHIERS STATIQUES (UI EMBARQUÉE OU SERVIE)
+    serve_static_asset(req, &path);
+}
+
+fn serve_static_asset(req: tiny_http::Request, path: &str) {
+    let mut asset_path = if path == "/" || path.is_empty() {
+        "index.html".to_string()
+    } else {
+        path.trim_start_matches('/').to_string()
+    };
+
+    let mime_type = match asset_path.split('.').last().unwrap_or("") {
+        "html" => "text/html; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "js" => "application/javascript; charset=utf-8",
+        "json" => "application/json; charset=utf-8",
+        "svg" => "image/svg+xml",
+        "png" => "image/png",
+        "ico" => "image/x-icon",
+        "ttf" => "font/ttf",
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
+        _ => "text/plain; charset=utf-8",
+    };
+
+    let content_type = Header::from_bytes(&b"Content-Type"[..], mime_type.as_bytes()).unwrap();
+
+    // 1. Essai de lecture directe sur disque (pour live dev sans recompile)
+    let local_fs_path = PathBuf::from("hernest-ide/ui").join(&asset_path);
+    if local_fs_path.exists() && local_fs_path.is_file() {
+        if let Ok(bytes) = fs::read(&local_fs_path) {
+            let resp = Response::from_data(bytes).with_header(content_type);
+            req.respond(resp).ok();
+            return;
+        }
+    }
+
+    // 2. Fallback sur l'asset embarqué
+    if let Some(file) = Asset::get(&asset_path) {
+        let resp = Response::from_data(file.data.into_owned()).with_header(content_type);
+        req.respond(resp).ok();
+        return;
+    }
+
+    // Si la ressource demandée était un asset statique (.js, .css, .json, .ttf, etc.) non trouvé, renvoyer 404 au lieu du HTML
+    if asset_path.contains('.') {
+        req.respond(Response::empty(404)).ok();
+        return;
+    }
+
+    // 3. Fallback SPA index.html (uniquement pour les routes de navigation sans extension)
+    if let Some(file) = Asset::get("index.html") {
+        let html_type = Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..]).unwrap();
+        let resp = Response::from_data(file.data.into_owned()).with_header(html_type);
+        req.respond(resp).ok();
+        return;
+    }
+
+    req.respond(Response::empty(404)).ok();
+}

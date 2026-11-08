@@ -1,0 +1,21 @@
+[package]
+name = "hernest-ide-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rusqlite = { version = "0.31", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+clap = { version = "4.4", features = ["derive"] }
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+chrono = "0.4"
+uuid = { version = "1.7", features = ["v4"] }
+tiny_http = "0.12"
+rust-embed = "8.2"
+regex = "1.10"
+urlencoding = "2.1"
+walkdir = "2.5"
+ignore = "0.4"
+similar = "2.6"
+

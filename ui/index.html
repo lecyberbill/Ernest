@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hernest • Station d'Opérations Agentiques</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/prism-tomorrow.min.css">
+    <!-- Configuration globale d'interception d'API pour Webview Desktop & Navigateur -->
+    <script>
+        (function() {
+            const isCustomScheme = window.location.protocol === 'tauri:' || window.location.protocol === 'file:' || window.location.hostname === 'tauri.localhost';
+            window.__HERNEST_API_BASE__ = isCustomScheme ? 'http://127.0.0.1:8080' : window.location.origin;
+            
+            // Interception native de fetch pour rediriger automatiquement /api/* vers http://127.0.0.1:8080 en mode Desktop
+            const origFetch = window.fetch;
+            window.fetch = function(resource, init) {
+                if (typeof resource === 'string' && resource.startsWith('/api/')) {
+                    resource = window.__HERNEST_API_BASE__ + resource;
+                } else if (resource instanceof Request && resource.url.startsWith('/api/')) {
+                    resource = new Request(window.__HERNEST_API_BASE__ + resource.url, resource);
+                }
+                return origFetch(resource, init);
+            };
+        })();
+    </script>
+    <!-- Librairies Zero-Build locales -->
+    <script src="js/vendor/marked.min.js"></script>
+    <script src="js/vendor/prism.min.js"></script>
+    <script src="js/vendor/python.min.js"></script>
+    <script src="js/vendor/rust.min.js"></script>
+    <script src="js/vendor/bash.min.js"></script>
+    <script src="js/vendor/json.min.js"></script>
+    <script src="js/vendor/sql.min.js"></script>
+    <script src="js/vendor/typescript.min.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Top HUD : Télémétrie & Infrastructure -->
+        <header class="top-hud">
+            <div class="hud-left">
+                <div class="brand">
+                    <div class="brand-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                        </svg>
+                    </div>
+                    <div class="brand-text">
+                        <span class="brand-title">Hernest</span>
+                        <span class="brand-badge">Agent Operations Center</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="hud-metrics">
+                <!-- Modèles En Ligne Dynamiques (Pastilles + Latences) -->
+                <div id="hud-online-models" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                    <div class="metric-pill" style="color: var(--text-muted); font-size: 0.75rem;">
+                        <span>Sondage des modèles...</span>
+                    </div>
+                </div>
+
+                <div class="metric-pill">
+                    <span class="metric-label">Runs</span>
+                    <span class="metric-val" id="hud-total-runs">0</span>
+                </div>
+                <div class="metric-pill">
+                    <span class="metric-label">Mémoires</span>
+                    <span class="metric-val" id="hud-total-memories">0</span>
+                </div>
+                <div class="metric-pill">
+                    <span class="metric-label">Outils</span>
+                    <span class="metric-val" id="hud-total-tools">4</span>
+                </div>
+
+                <button id="btn-refresh-hud"
+                    style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-subtle); color: var(--on-surface); border-radius: var(--radius-sm); padding: 0.25rem 0.65rem; cursor: pointer; font-size: 0.75rem; font-family: var(--font-mono); display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s;"
+                    title="Sonder à nouveau les moteurs en ligne">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                    <span>Sonde</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Corps du Cockpit en 3 Volets -->
+        <div class="cockpit-body">
+            <!-- Volet Gauche : Navigation Opérationnelle -->
+            <aside class="sidebar">
+                <nav>
+                    <button class="active" data-view="run">
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg></span>
+                        <span>Console de Run</span>
+                    </button>
+                    <button data-view="chat">
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            </svg></span>
+                        <span>Conversation</span>
+                    </button>
+                    <button data-view="memories">
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                            </svg></span>
+                        <span>Mémoires Persistantes</span>
+                    </button>
+                    <button data-view="skills">
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path
+                                    d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z">
+                                </path>
+                            </svg></span>
+                        <span>Compétences & Outils</span>
+                    </button>
+                    <button data-view="artifacts">
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg></span>
+                        <span>Artefacts Générés</span>
+                    </button>
+                    <button data-view="tasks">
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg></span>
+                        <span>Tâches Programmées</span>
+                    </button>
+                    <button data-view="evals">
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <circle cx="12" cy="12" r="6"></circle>
+                                <circle cx="12" cy="12" r="2"></circle>
+                            </svg></span>
+                        <span>Évals & Benchmarks</span>
+                    </button>
+                    <button data-view="settings">
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path
+                                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                                </path>
+                            </svg></span>
+                        <span>Configuration LLM</span>
+                    </button>
+                </nav>
+
+                <div class="sidebar-footer">
+                    <div>
+                        <span class="status-dot"></span>
+                        <span>Zéro Démon • Run-to-0</span>
+                    </div>
+                    <span style="font-family: var(--font-mono); opacity: 0.7;">v1.0-Ops</span>
+                </div>
+            </aside>
+
+            <!-- Volet Central : Scène Principale & Widget 16-Bit -->
+            <main class="main-content" id="view-container">
+                <!-- Injecté dynamiquement par app.js -->
+            </main>
+
+            <!-- Volet Droit : Inspecteur de Contexte & Historique -->
+            <context-inspector></context-inspector>
+        </div>
+    </div>
+
+    <script type="module" src="js/app.js?v=3.0"></script>
+</body>
+
+</html>

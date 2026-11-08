@@ -1,0 +1,67 @@
+:root {
+    /* Palette Stitch Cyberpunk Contrôlé / Cockpit d'Ingénierie */
+    --surface-lowest: #060e20;
+    --surface-dim: #0b1326;
+    --surface-low: #131b2e;
+    --surface: #0b1326;
+    --surface-container: #171f33;
+    --surface-high: #222a3d;
+    --surface-highest: #2d3449;
+    --surface-bright: #31394d;
+
+    --bg-base: #060e20;
+    --bg-surface: #0b1326;
+    --bg-surface-elevated: #171f33;
+    --bg-surface-glass: rgba(19, 27, 46, 0.85);
+
+    /* Textes & Signaux */
+    --on-surface: #dae2fd;
+    --on-surface-variant: #c7c4d7;
+    --outline: #908fa0;
+    --outline-variant: #464554;
+    --border-subtle: rgba(70, 69, 84, 0.4);
+    --border-accent: rgba(128, 131, 255, 0.35);
+
+    --text-primary: #dae2fd;
+    --text-secondary: #c7c4d7;
+    --text-muted: #908fa0;
+
+    /* Accents Sémantiques */
+    --primary: #c0c1ff;
+    --primary-container: #8083ff;
+    --on-primary: #1000a9;
+    --on-primary-container: #0d0096;
+    --accent-indigo: #8083ff;
+
+    --secondary: #4cd7f6;
+    --secondary-container: #03b5d3;
+    --on-secondary: #003640;
+    --accent-cyan: #4cd7f6;
+
+    --tertiary: #4edea3;
+    --tertiary-container: #00885d;
+    --accent-emerald: #4edea3;
+
+    --accent-amber: #f59e0b;
+    --error: #ffb4ab;
+    --error-container: #93000a;
+    --on-error: #690005;
+    --accent-rose: #ffb4ab;
+
+    /* Typographies & Rayons */
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', Consolas, monospace;
+
+    --radius-xs: 2px;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+
+    /* Ombres & Lueurs */
+    --shadow-soft: 0 4px 20px -2px rgba(0, 0, 0, 0.6);
+    --shadow-glow: 0 0 16px rgba(128, 131, 255, 0.25);
+    --shadow-glow-cyan: 0 0 16px rgba(76, 215, 246, 0.25);
+    --shadow-glow-emerald: 0 0 16px rgba(78, 222, 163, 0.25);
+    --shadow-glow-error: 0 0 20px rgba(255, 180, 171, 0.3);
+}

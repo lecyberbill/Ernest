@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tableau de bord — Santé Machine</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card-hover: #222633;
+    --border: #2a2f3e;
+    --text: #e4e6ef;
+    --muted: #8b8fa3;
+    --accent: #6c5ce7;
+    --accent-light: #a29bfe;
+    --green: #00b894;
+    --yellow: #fdcb6e;
+    --red: #e17055;
+    --blue: #74b9ff;
+    --radius: 14px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+  .header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent-light), var(--blue));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: .4rem;
+  }
+  .header p { color: var(--muted); font-size: .95rem; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    transition: transform .2s, background .2s;
+  }
+  .card:hover {
+    background: var(--card-hover);
+    transform: translateY(-3px);
+  }
+  .card-title {
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--muted);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+  .card-title .icon { font-size: 1.1rem; }
+
+  /* KPI Cards */
+  .kpi-value {
+    font-size: 2.4rem;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: .3rem;
+  }
+  .kpi-label { color: var(--muted); font-size: .85rem; }
+  .kpi-sub { margin-top: .8rem; font-size: .8rem; color: var(--muted); }
+  .badge {
+    display: inline-block;
+    padding: .2rem .6rem;
+    border-radius: 20px;
+    font-size: .72rem;
+    font-weight: 600;
+    margin-top: .6rem;
+  }
+  .badge-green  { background: rgba(0,184,148,.15); color: var(--green); }
+  .badge-yellow { background: rgba(253,203,110,.15); color: var(--yellow); }
+  .badge-red    { background: rgba(225,112,85,.15); color: var(--red); }
+  .badge-blue   { background: rgba(116,185,255,.15); color: var(--blue); }
+
+  /* Gauge */
+  .gauge-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  .gauge-row:last-child { margin-bottom: 0; }
+  .gauge-label {
+    width: 2.2rem;
+    font-weight: 600;
+    font-size: .95rem;
+  }
+  .gauge-track {
+    flex: 1;
+    height: 12px;
+    background: var(--bg);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .gauge-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 1s ease;
+  }
+  .gauge-pct {
+    width: 3.5rem;
+    text-align: right;
+    font-size: .85rem;
+    font-weight: 600;
+  }
+  .fill-green  { background: linear-gradient(90deg, #00b894, #55efc4); }
+  .fill-yellow { background: linear-gradient(90deg, #fdcb6e, #ffeaa7); }
+  .fill-red    { background: linear-gradient(90deg, #e17055, #fab1a0); }
+  .fill-blue   { background: linear-gradient(90deg, #6c5ce7, #a29bfe); }
+
+  /* OS Card */
+  .os-row {
+    display: flex;
+    justify-content: space-between;
+    padding: .55rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: .9rem;
+  }
+  .os-row:last-child { border-bottom: none; }
+  .os-key { color: var(--muted); }
+  .os-val { font-weight: 600; }
+
+  /* Alert list */
+  .alert-list { list-style: none; }
+  .alert-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: .6rem;
+    padding: .5rem 0;
+    font-size: .88rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .alert-list li:last-child { border-bottom: none; }
+  .alert-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+  .dot-red { background: var(--red); }
+  .dot-yellow { background: var(--yellow); }
+  .dot-green { background: var(--green); }
+
+  .footer {
+    text-align: center;
+    margin-top: 2.5rem;
+    color: var(--muted);
+    font-size: .78rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🩺 Tableau de bord — Santé Machine</h1>
+  <p>Audit automatisé · Windows 11 Famille · v10.0.26300 (64 bits)</p>
+</div>
+
+<div class="grid">
+
+  <!-- KPI: RAM -->
+  <div class="card">
+    <div class="card-title"><span class="icon">🧠</span> Mémoire vive (RAM)</div>
+    <div class="kpi-value">43,3 %</div>
+    <div class="kpi-label">Taux d'utilisation global</div>
+    <div class="gauge-row" style="margin-top:1rem;">
+      <span class="gauge-label">RAM</span>
+      <div class="gauge-track">
+        <div class="gauge-fill fill-green" style="width:43.3%"></div>
+      </div>
+      <span class="gauge-pct">43,3 %</span>
+    </div>
+    <div class="kpi-sub">Utilisée : 26,9 Go / 62,2 Go</div>
+    <span class="badge badge-green">✓ Sain</span>
+  </div>
+
+  <!-- KPI: OS -->
+  <div class="card">
+    <div class="card-title"><span class="icon">💻</span> Système d'exploitation</div>
+    <div class="os-row"><span class="os-key">Nom</span><span class="os-val">Windows 11 Famille</span></div>
+    <div class="os-row"><span class="os-key">Version</span><span class="os-val">10.0.26300</span></div>
+    <div class="os-row"><span class="os-key">Architecture</span><span class="os-val">64 bits</span></div>
+    <div class="os-row"><span class="os-key">Partitions</span><span class="os-val">5 (C: D: E: F: G:)</span></div>
+    <span class="badge badge-blue">i Information</span>
+  </div>
+
+  <!-- KPI: Disque global -->
+  <div class="card">
+    <div class="card-title"><span class="icon">💾</span> Stockage global</div>
+    <div class="kpi-value">5 342,5 Go</div>
+    <div class="kpi-label">Capacité totale (5 partitions)</div>
+    <div class="kpi-sub" style="margin-top:.6rem;">Libre : 3 280,8 Go · Utilisé : 2 061,7 Go</div>
+    <div class="gauge-row" style="margin-top:1rem;">
+      <span class="gauge-label">Total</span>
+      <div class="gauge-track">
+        <div class="gauge-fill fill-yellow" style="width:38.6%"></div>
+      </div>
+      <span class="gauge-pct">38,6 %</span>
+    </div>
+    <span class="badge badge-yellow">ℹ Surveiller</span>
+  </div>
+
+  <!-- Disque détaillé -->
+  <div class="card" style="grid-column: span 2;">
+    <div class="card-title"><span class="icon">📊</span> Détail des partitions</div>
+    <div class="gauge-row">
+      <span class="gauge-label">C:</span>
+      <div class="gauge-track"><div class="gauge-fill fill-yellow" style="width:59.1%"></div></div>
+      <span class="gauge-pct">59,1 %</span>
+    </div>
+    <div class="gauge-row">
+      <span class="gauge-label">D:</span>
+      <div class="gauge-track"><div class="gauge-fill fill-yellow" style="width:72.5%"></div></div>
+      <span class="gauge-pct">72,5 %</span>
+    </div>
+    <div class="gauge-row">
+      <span class="gauge-label">E:</span>
+      <div class="gauge-track"><div class="gauge-fill fill-green" style="width:16.1%"></div></div>
+      <span class="gauge-pct">16,1 %</span>
+    </div>
+    <div class="gauge-row">
+      <span class="gauge-label">F:</span>
+      <div class="gauge-track"><div class="gauge-fill fill-green" style="width:6.0%"></div></div>
+      <span class="gauge-pct">6,0 %</span>
+    </div>
+    <div class="gauge-row">
+      <span class="gauge-label">G:</span>
+      <div class="gauge-track"><div class="gauge-fill fill-red" style="width:99.8%"></div></div>
+      <span class="gauge-pct" style="color:var(--red);">99,8 %</span>
+    </div>
+  </div>
+
+  <!-- Alertes -->
+  <div class="card">
+    <div class="card-title"><span class="icon">🚨</span> Alertes & Statut</div>
+    <ul class="alert-list">
+      <li><span class="alert-dot dot-red"></span><span><strong>Partition G:</strong> 99,8 % utilisée — seulement ~2 Go libres. <em>Action requise : libérer de l'espace.</em></span></li>
+      <li><span class="alert-dot dot-yellow"></span><span><strong>Partition D:</strong> 72,5 % utilisée — surveiller la croissance.</span></li>
+      <li><span class="alert-dot dot-green"></span><span><strong>RAM:</strong> 43,3 % — marge confortable (~35 Go libres).</span></li>
+      <li><span class="alert-dot dot-green"></span><span><strong>Partitions C, E, F:</strong> usage nominal.</span></li>
+    </ul>
+  </div>
+
+  <!-- Résumé numérique -->
+  <div class="card">
+    <div class="card-title"><span class="icon">📈</span> Chiffres clés</div>
+    <div class="kpi-value" style="font-size:1.6rem;">5 / 5</div>
+    <div class="kpi-label">Partitions détectées</div>
+    <div class="kpi-sub" style="margin-top:.8rem;">
+      Total disque : <strong>5 342,5 Go</strong><br>
+      Total RAM : <strong>62,2 Go</strong><br>
+      Espace libre disque : <strong>3 280,8 Go</strong><br>
+      RAM libre : <strong>35,2 Go</strong>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  Généré par Hernest · Agentique autonome · Moteur Rust natif · Audit santé machine
+</div>
+
+</body>
+</html>

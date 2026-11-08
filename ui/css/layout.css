@@ -1,0 +1,287 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    height: 100vh;
+    overflow: hidden;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Structure Globale : HUD en haut + Cockpit en bas */
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+}
+
+/* Top HUD */
+.top-hud {
+    background: rgba(6, 14, 32, 0.95);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 0.45rem 1.25rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 52px;
+    flex-shrink: 0;
+    z-index: 20;
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
+}
+
+.hud-left {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.hud-metrics {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.metric-pill {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: var(--surface-container);
+    border: 1px solid var(--border-subtle);
+    padding: 0.25rem 0.65rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.76rem;
+}
+
+.metric-pill .metric-val {
+    font-weight: 700;
+    color: var(--secondary);
+    font-family: var(--font-mono);
+}
+
+.metric-pill .metric-label {
+    color: var(--outline);
+    text-transform: uppercase;
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+    font-family: var(--font-mono);
+}
+
+/* Corps en 3 Volets : Sidebar (230px) | Main (1fr) | Context Inspector (320px) */
+.cockpit-body {
+    display: flex;
+    flex-direction: row;
+    height: calc(100vh - 52px);
+    width: 100vw;
+    overflow: hidden;
+}
+
+/* Volet Gauche : Sidebar */
+.sidebar {
+    width: 230px;
+    flex-shrink: 0;
+    background: var(--surface-container-lowest);
+    backdrop-filter: blur(16px);
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    padding: 1.1rem 0.85rem;
+    gap: 1.1rem;
+    z-index: 10;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.brand-icon {
+    width: 30px;
+    height: 30px;
+    background: var(--primary-gradient);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    box-shadow: var(--shadow-glow);
+}
+
+.brand-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.brand-title {
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    background: linear-gradient(180deg, #ffffff 0%, #cbd5e1 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.brand-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--accent-cyan);
+    letter-spacing: 0.08em;
+}
+
+nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+nav button {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+nav button .nav-icon {
+    font-size: 0.95rem;
+    opacity: 0.8;
+}
+
+nav button:hover {
+    background: var(--surface-container-high);
+    color: var(--on-surface);
+}
+
+nav button.active {
+    background: var(--primary-container);
+    color: var(--on-primary-container);
+    font-weight: 600;
+    box-shadow: 0 0 14px rgba(128, 131, 255, 0.35);
+}
+
+nav button.active .nav-icon {
+    opacity: 1;
+    color: var(--on-primary-container);
+}
+
+nav button.active::before {
+    content: '';
+    position: absolute;
+    left: -1rem;
+    top: 25%;
+    bottom: 25%;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
+    background: var(--primary-gradient);
+}
+
+.sidebar-footer {
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--accent-emerald);
+    box-shadow: 0 0 8px var(--accent-emerald);
+    display: inline-block;
+    margin-right: 0.4rem;
+}
+
+/* Volet Central : Scène & Console */
+.main-content {
+    flex: 1;
+    min-width: 0;
+    background: radial-gradient(circle at 80% 10%, rgba(99, 102, 241, 0.06) 0%, transparent 40%),
+                radial-gradient(circle at 20% 90%, rgba(6, 182, 212, 0.04) 0%, transparent 50%),
+                var(--bg-base);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 1rem 1.25rem;
+}
+
+/* Volet Droit : Context Inspector */
+context-inspector {
+    width: 320px;
+    flex-shrink: 0;
+    display: block;
+    height: 100%;
+}
+
+.context-inspector-pane {
+    background: rgba(11, 15, 25, 0.85);
+    border-left: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    padding: 1rem 1.15rem;
+    overflow-y: auto;
+    height: 100%;
+    gap: 1rem;
+}
+
+.context-inspector-pane h3 {
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    overflow-y: auto;
+    max-height: 260px;
+}
+
+.history-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-subtle);
+    padding: 0.65rem 0.85rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.82rem;
+}
+
+.history-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--border-accent);
+}
+
+.history-card.selected {
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.1);
+}
