@@ -1,0 +1,22 @@
+# Extracteurs d'identifiants, un module par script_kind.
+# Les motifs utilisent la syntaxe du crate regex (ni lookahead, ni backreference).
+# Chaque motif doit cibler une syntaxe propre au produit, jamais un nom local.
+extractors:
+  test:
+    patterns:
+      - regex: '\b(?:TAG|PARAM)_[A-Z0-9_]+\b'
+  aml:
+    patterns:
+      - regex: '<\s*(AM[A-Za-z0-9_]+)'
+        group: 1
+      - regex: '\b(AM[A-Z][A-Za-z0-9_]*)\b'
+  xml:
+    patterns:
+      - regex: '</?\s*([A-Za-z_][A-Za-z0-9_.-]*)'
+        group: 1
+  jsx:
+    patterns:
+      - regex: '<\s*([A-Z][A-Za-z0-9_]*)'
+        group: 1
+      - regex: '\b([A-Z][A-Za-z0-9_]*)\s*\('
+        group: 1

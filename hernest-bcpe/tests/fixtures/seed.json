@@ -1,0 +1,38 @@
+{
+  "products": [
+    {
+      "product_id": "produit-test",
+      "name": "Produit de test",
+      "current_version": "2.0"
+    }
+  ],
+  "lexicon_identifiers": ["TAG_ATTENTE", "TAG_SORTIE", "PARAM_NOUVEAU"],
+  "entries": [
+    {
+      "subject_key": "attente-pause",
+      "kind": "piege",
+      "title": "Instruction d'attente",
+      "correction": "Utiliser TAG_ATTENTE avec le paramètre DUREE (secondes).",
+      "status": "valide",
+      "validated_by": "test",
+      "product_version": "2.0",
+      "terms": ["attendre", "pause", "wait", "delay"],
+      "identifiers": [
+        { "identifier": "TAG_ATTENTE", "state": "valide" },
+        { "identifier": "TAG_PAUSE", "state": "inexistant", "replaced_by": "TAG_ATTENTE" }
+      ]
+    },
+    {
+      "subject_key": "ancien-param",
+      "kind": "regle",
+      "title": "Paramètre remplacé",
+      "correction": "PARAM_ANCIEN est remplacé par PARAM_NOUVEAU.",
+      "status": "valide",
+      "validated_by": "test",
+      "product_version": "1.0",
+      "identifiers": [
+        { "identifier": "PARAM_ANCIEN", "state": "deprecie", "replaced_by": "PARAM_NOUVEAU" }
+      ]
+    }
+  ]
+}

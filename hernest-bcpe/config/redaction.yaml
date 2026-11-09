@@ -1,0 +1,14 @@
+# Motifs sensibles masqués avant stockage, sur tous les champs texte libres.
+# Syntaxe des expressions : crate regex. Le remplacement utilise $1, $2, ...
+redaction:
+  patterns:
+    - regex: '(?i)\b(password|passwd|pwd|token|secret|api[_-]?key)\s*[:=]\s*[^\s,;]+'
+      replacement: '$1=[REDACTED]'
+    - regex: '(?i)\bbearer\s+[A-Za-z0-9._~+/-]+=*'
+      replacement: 'Bearer [REDACTED]'
+    - regex: '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
+      replacement: '[EMAIL]'
+    - regex: '(?i)[A-Z]:\\Users\\[^\\\s]+'
+      replacement: '[PATH]'
+    - regex: '(?i)/home/[^/\s]+'
+      replacement: '[PATH]'
