@@ -281,8 +281,62 @@ fn handle_request(mut req: tiny_http::Request) {
             return;
         }
 
-        if path == "/api/ide/settings" {
+        if path == "/api/ide/run_detail" {
             let conn = get_connection(None).unwrap();
+            let run_id = query.get("run_id").map(|s| s.as_str()).unwrap_or("");
+            let mut traces = Vec::new();
+            if let Ok(mut stmt) = conn.prepare("SELECT step_order, step_type, tool_name, payload, created_at FROM run_traces WHERE run_id = ? ORDER BY step_order ASC") {
+                if let Ok(rows) = stmt.query_map([run_id], |row| {
+                    Ok(serde_json::json!({
+                        "step_order": row.get::<_, i64>(0)?,
+                        "step_type": row.get::<_, String>(1)?,
+                        "tool_name": row.get::<_, Option<String>>(2)?,
+                        "payload": row.get::<_, String>(3)?,
+                        "created_at": row.get::<_, Option<String>>(4)?.unwrap_or_default()
+                    }))
+                }) {
+                    for r in rows.flatten() {
+                        traces.push(r);
+                    }
+                }
+            }
+            let resp = Response::from_string(serde_json::json!({
+                "run_id": run_id,
+                "traces": traces
+            }).to_string())
+            .with_header(json_header)
+            .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/ide/projects" {
+            let conn = get_connection(None).unwrap();
+            let mut list = Vec::new();
+            if let Ok(mut stmt) = conn.prepare("SELECT id, name, root_path, description, created_at, updated_at FROM projects ORDER BY updated_at DESC") {
+                if let Ok(rows) = stmt.query_map([], |row| {
+                    Ok(serde_json::json!({
+                        "id": row.get::<_, String>(0)?,
+                        "name": row.get::<_, String>(1)?,
+                        "root_path": row.get::<_, String>(2)?,
+                        "description": row.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                        "created_at": row.get::<_, Option<String>>(4)?.unwrap_or_default(),
+                        "updated_at": row.get::<_, Option<String>>(5)?.unwrap_or_default()
+                    }))
+                }) {
+                    for r in rows.flatten() {
+                        list.push(r);
+                    }
+                }
+            }
+            let resp = Response::from_string(serde_json::json!(list).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/ide/settings" {
             let conn = get_connection(None).unwrap();
             let mut map = serde_json::Map::new();
             if let Ok(mut stmt) = conn.prepare("SELECT key, value, is_secret FROM app_settings") {
@@ -486,6 +540,36 @@ Garde l'indentation appropriée.";
             let conn = get_connection(None).unwrap();
             let p_id = payload["id"].as_str().unwrap_or("");
             conn.execute("DELETE FROM model_providers WHERE id = ?", [p_id]).ok();
+            let resp = Response::from_string(serde_json::json!({"status": "deleted", "id": p_id}).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/ide/projects" {
+            let conn = get_connection(None).unwrap();
+            let p_id = payload["id"].as_str().map(|s| s.to_string()).unwrap_or_else(|| format!("proj_{}", &uuid::Uuid::new_v4().to_string().replace('-', "")[..8]));
+            let name = payload["name"].as_str().unwrap_or("Nouveau Projet");
+            let root_path = payload["root_path"].as_str().unwrap_or(".");
+            let desc = payload["description"].as_str().unwrap_or("");
+
+            conn.execute(
+                "INSERT INTO projects (id, name, root_path, description, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET name=excluded.name, root_path=excluded.root_path, description=excluded.description, updated_at=CURRENT_TIMESTAMP",
+                rusqlite::params![p_id, name, root_path, desc],
+            ).ok();
+
+            let resp = Response::from_string(serde_json::json!({"status": "saved", "id": p_id}).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/ide/projects/delete" {
+            let conn = get_connection(None).unwrap();
+            let p_id = payload["id"].as_str().unwrap_or("");
+            conn.execute("DELETE FROM projects WHERE id = ?", [p_id]).ok();
             let resp = Response::from_string(serde_json::json!({"status": "deleted", "id": p_id}).to_string())
                 .with_header(json_header)
                 .with_header(cors_header);

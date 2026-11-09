@@ -1,7 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
     // État global de Hernest IDE
     const state = {
+        currentProjectId: 'hernest',
+        currentProjectName: 'Hernest',
         currentRoot: '.',
+        projects: [],
         openTabs: [],
         activeTabPath: null,
         isDiffMode: false,
@@ -1274,13 +1277,290 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+    const btnToggleHistory = document.getElementById('btn-toggle-history');
+    const agentHistoryPane = document.getElementById('agent-history-pane');
+
+    async function loadAgentHistory() {
+        if (!agentHistoryPane) return;
+        agentHistoryPane.innerHTML = '<div style="color:var(--text-muted); padding:0.25rem;">Chargement historique...</div>';
+        try {
+            const res = await fetch('/api/ide/history?project=hernest_ide_workspace');
+            const runs = await res.json();
+            agentHistoryPane.innerHTML = '';
+
+            if (!runs || runs.length === 0) {
+                agentHistoryPane.innerHTML = '<div style="color:var(--text-muted); padding:0.25rem;">Aucune session précédente enregistrée</div>';
+                return;
+            }
+
+            runs.forEach(r => {
+                const item = document.createElement('div');
+                item.className = 'palette-item';
+                item.style.cssText = 'padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.72rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center;';
+                item.innerHTML = `
+                    <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 8px;">
+                        <span style="color: var(--accent-cyan); font-weight: 600;">[${r.status}]</span> ${escapeHtml(r.prompt)}
+                    </div>
+                    <span style="color: var(--text-muted); font-size: 0.65rem; flex-shrink: 0;">${r.created_at ? r.created_at.split(' ')[1] || r.created_at : ''}</span>
+                `;
+                item.addEventListener('click', async () => {
+                    await restoreRunTraces(r.id, r.prompt);
+                    agentHistoryPane.style.display = 'none';
+                });
+                agentHistoryPane.appendChild(item);
+            });
+        } catch (e) {
+            agentHistoryPane.innerHTML = `<div style="color:var(--accent-rose); font-size:0.7rem;">Erreur historique: ${e.message}</div>`;
+        }
+    }
+
+    async function restoreRunTraces(runId, promptText) {
+        try {
+            const res = await fetch(`/api/ide/run_detail?run_id=${encodeURIComponent(runId)}`);
+            const data = await res.json();
+            chatStream.innerHTML = '';
+
+            // 1. Bulle prompt restaurée
+            const userBubble = document.createElement('div');
+            userBubble.className = 'chat-bubble user';
+            userBubble.style.cssText = `
+                background: rgba(99, 102, 241, 0.15);
+                border: 1px solid var(--accent-cyan);
+                padding: 0.65rem 0.75rem;
+                border-radius: 4px;
+                font-size: 0.78rem;
+                align-self: flex-end;
+                max-width: 90%;
+            `;
+            userBubble.textContent = promptText;
+            chatStream.appendChild(userBubble);
+
+            // 2. Bulle assistant restaurée
+            const assistantBubble = document.createElement('div');
+            assistantBubble.className = 'chat-bubble assistant';
+            assistantBubble.style.cssText = `
+                background: rgba(30, 41, 59, 0.5);
+                border: 1px solid var(--border-subtle);
+                padding: 0.75rem;
+                border-radius: 4px;
+                font-size: 0.78rem;
+                line-height: 1.45;
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+            `;
+
+            (data.traces || []).forEach(tr => {
+                if (tr.step_type === 'thought') {
+                    const d = document.createElement('div');
+                    d.style.color = 'var(--text-muted)';
+                    d.style.fontStyle = 'italic';
+                    d.textContent = `💭 ${tr.payload}`;
+                    assistantBubble.appendChild(d);
+                } else if (tr.step_type === 'tool_call') {
+                    const d = document.createElement('div');
+                    d.style.cssText = 'color:var(--accent-amber); font-weight:600; padding:2px 6px; background:rgba(245,158,11,0.1); border-radius:3px;';
+                    d.textContent = `⚙️ Outil : ${tr.tool_name || 'action'} (${tr.payload})`;
+                    assistantBubble.appendChild(d);
+                } else if (tr.step_type === 'answer') {
+                    const d = document.createElement('div');
+                    d.style.color = 'var(--text-primary)';
+                    d.style.whiteSpace = 'pre-wrap';
+                    d.textContent = tr.payload;
+                    assistantBubble.appendChild(d);
+                }
+            });
+
+            chatStream.appendChild(assistantBubble);
+            chatStream.scrollTop = chatStream.scrollHeight;
+        } catch (e) {
+            alert(`Impossible de charger les traces du run: ${e.message}`);
+        }
+    }
+
+    if (btnToggleHistory) {
+        btnToggleHistory.addEventListener('click', () => {
+            const isVisible = agentHistoryPane.style.display === 'flex';
+            agentHistoryPane.style.display = isVisible ? 'none' : 'flex';
+            if (!isVisible) loadAgentHistory();
+        });
+    }
+
     if (btnClearAgent) {
         btnClearAgent.addEventListener('click', () => {
             chatStream.innerHTML = `
                 <div class="chat-bubble assistant" style="background: rgba(30, 41, 59, 0.4); border: 1px solid var(--border-subtle); padding: 0.75rem; border-radius: var(--radius-sm); font-size: 0.8rem; line-height: 1.45;">
-                    👋 Historique effacé. Prêt pour une nouvelle consigne.
+                    👋 Prêt pour une nouvelle consigne. Vous pouvez également cliquer sur <strong>📜 Reprendre</strong> pour recharger une session passée.
                 </div>
             `;
+            if (agentHistoryPane) agentHistoryPane.style.display = 'none';
+        });
+    }
+
+    // ====================================================
+    // 12. GESTIONNAIRE DE PROJETS MULTI-ESPACES
+    // ====================================================
+    const btnProjectManager = document.getElementById('btn-project-manager');
+    const projectModal = document.getElementById('project-modal');
+    const projectList = document.getElementById('project-list');
+    const btnToggleNewProject = document.getElementById('btn-toggle-new-project');
+    const newProjectForm = document.getElementById('new-project-form');
+    const projNameInput = document.getElementById('proj-name-input');
+    const projRootInput = document.getElementById('proj-root-input');
+    const btnSubmitNewProject = document.getElementById('btn-submit-new-project');
+    const btnCancelNewProject = document.getElementById('btn-cancel-new-project');
+    const btnCloseProjectModal = document.getElementById('btn-close-project-modal');
+    const topProjectName = document.getElementById('top-project-name');
+
+    async function loadProjectsList() {
+        try {
+            const res = await fetch('/api/ide/projects');
+            state.projects = await res.json();
+            renderProjectsModal();
+        } catch (e) {}
+    }
+
+    function renderProjectsModal() {
+        if (!projectList) return;
+        projectList.innerHTML = '';
+
+        if (!state.projects || state.projects.length === 0) {
+            // Projet par défaut si base vide
+            state.projects = [{
+                id: 'hernest',
+                name: 'Hernest',
+                root_path: '.',
+                description: 'Workspace principal'
+            }];
+        }
+
+        state.projects.forEach(p => {
+            const isCurrent = p.id === state.currentProjectId;
+            const item = document.createElement('div');
+            item.className = `palette-item ${isCurrent ? 'active' : ''}`;
+            item.style.cssText = 'padding: 0.6rem 0.8rem; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;';
+            item.innerHTML = `
+                <div style="flex: 1; cursor: pointer;">
+                    <div style="font-weight: 700; color: ${isCurrent ? 'var(--accent-cyan)' : 'var(--text-primary)'}; font-size: 0.82rem;">
+                        📁 ${escapeHtml(p.name)} ${isCurrent ? '<span style="font-size:0.68rem; color:var(--accent-emerald);">● Actif</span>' : ''}
+                    </div>
+                    <div style="color: var(--text-muted); font-size: 0.7rem; font-family: var(--font-mono);">${escapeHtml(p.root_path)}</div>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    ${!isCurrent ? `<button class="icon-btn btn-del-proj" title="Supprimer" style="color:var(--accent-rose); font-size:0.75rem;">✕</button>` : ''}
+                </div>
+            `;
+
+            item.querySelector('div').addEventListener('click', () => {
+                switchProject(p);
+                closeProjectModal();
+            });
+
+            const delBtn = item.querySelector('.btn-del-proj');
+            if (delBtn) {
+                delBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if (!confirm(`Supprimer le projet "${p.name}" ?`)) return;
+                    await fetch('/api/ide/projects/delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: p.id })
+                    });
+                    loadProjectsList();
+                });
+            }
+
+            projectList.appendChild(item);
+        });
+    }
+
+    async function switchProject(proj) {
+        state.currentProjectId = proj.id;
+        state.currentProjectName = proj.name;
+        state.currentRoot = proj.root_path || '.';
+        if (topProjectName) topProjectName.textContent = `Projet : ${proj.name}`;
+
+        // Fermer tous les onglets du projet précédent
+        state.openTabs.forEach(t => { if (t.monacoModel) t.monacoModel.dispose(); });
+        state.openTabs = [];
+        state.activeTabPath = null;
+        if (editorInstance) editorInstance.setValue('');
+        renderTabs();
+
+        // Réinitialiser l'arborescence et les caches
+        state.expandedDirs = new Set([state.currentRoot]);
+        await loadTree();
+        await loadAllProjectFiles();
+        refreshGitStatus();
+        refreshDiagnostics();
+
+        // Mettre à jour l'invite du copilote
+        chatStream.innerHTML = `
+            <div class="chat-bubble assistant" style="background: rgba(30, 41, 59, 0.4); border: 1px solid var(--border-subtle); padding: 0.75rem; border-radius: var(--radius-sm); font-size: 0.8rem; line-height: 1.45;">
+                📁 Projet basculé sur <strong>${escapeHtml(proj.name)}</strong> (Racine : <code>${escapeHtml(state.currentRoot)}</code>). Contexte, mémoires et sessions dédiés.
+            </div>
+        `;
+
+        saveSessionState();
+    }
+
+    function openProjectModal() {
+        if (!projectModal) return;
+        projectModal.classList.add('open');
+        newProjectForm.style.display = 'none';
+        loadProjectsList();
+    }
+
+    function closeProjectModal() {
+        if (!projectModal) return;
+        projectModal.classList.remove('open');
+    }
+
+    if (btnProjectManager) btnProjectManager.addEventListener('click', openProjectModal);
+    if (btnCloseProjectModal) btnCloseProjectModal.addEventListener('click', closeProjectModal);
+    if (btnToggleNewProject) {
+        btnToggleNewProject.addEventListener('click', () => {
+            const isShown = newProjectForm.style.display === 'flex';
+            newProjectForm.style.display = isShown ? 'none' : 'flex';
+            if (!isShown) projNameInput.focus();
+        });
+    }
+    if (btnCancelNewProject) {
+        btnCancelNewProject.addEventListener('click', () => {
+            newProjectForm.style.display = 'none';
+        });
+    }
+
+    if (btnSubmitNewProject) {
+        btnSubmitNewProject.addEventListener('click', async () => {
+            const name = projNameInput.value.trim();
+            const root = projRootInput.value.trim() || '.';
+            if (!name) {
+                alert('Veuillez entrer un nom de projet.');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/ide/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name,
+                        root_path: root,
+                        description: `Projet ${name}`
+                    })
+                });
+                const data = await res.json();
+                projNameInput.value = '';
+                projRootInput.value = '';
+                newProjectForm.style.display = 'none';
+
+                // Basculer directement sur le nouveau projet créé
+                await switchProject({ id: data.id, name, root_path: root });
+                closeProjectModal();
+            } catch (e) {
+                alert(`Erreur création projet: ${e.message}`);
+            }
         });
     }
 
