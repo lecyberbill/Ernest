@@ -162,6 +162,42 @@ pub fn get_ide_tools_schemas() -> Vec<Value> {
                     "required": ["role", "task"]
                 }
             }
+        }),
+        serde_json::json!({
+            "type": "function",
+            "function": {
+                "name": "kb_search",
+                "description": "Recherche dans la base de connaissances d'expérience (BCPE) les pièges, règles et solutions connus pour un produit (ex: 'hernest', techno de niche, librairie spécifique) AVANT de coder ou modifier.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "product_id": { "type": "string", "description": "Identifiant du produit ou technologie (ex: 'hernest')" },
+                        "query": { "type": "string", "description": "Mots-clés du problème rencontré, fonction ou symptôme" }
+                    },
+                    "required": ["product_id", "query"]
+                }
+            }
+        }),
+        serde_json::json!({
+            "type": "function",
+            "function": {
+                "name": "kb_propose",
+                "description": "Enregistre une découverte, un bug résolu ou un piège évité dans la base de connaissances d'expérience (BCPE) pour qu'il ne se reproduise plus jamais (particulièrement crucial pour les technos de niche).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "product_id": { "type": "string", "description": "Identifiant du produit (ex: 'hernest')" },
+                        "subject_key": { "type": "string", "description": "Clé slug unique du sujet (ex: 'monaco-webworker-blob', 'powershell-pipe-syntax')" },
+                        "kind": { "type": "string", "description": "Type d'entrée: 'piege' (bug/comportement inattendu), 'regle' (bonne pratique/contrainte), 'catalogue' (description d'API)" },
+                        "title": { "type": "string", "description": "Titre explicite du piège ou de la découverte" },
+                        "symptom": { "type": "string", "description": "Message d'erreur exact ou symptôme constaté" },
+                        "cause": { "type": "string", "description": "Cause racine technique identifiée" },
+                        "correction": { "type": "string", "description": "Solution technique exacte appliquée pour corriger" },
+                        "example": { "type": "string", "description": "Extrait de code minimal d'illustration (optionnel)" }
+                    },
+                    "required": ["product_id", "subject_key", "kind", "title", "correction"]
+                }
+            }
         })
     ]
 }

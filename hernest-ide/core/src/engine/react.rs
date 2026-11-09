@@ -175,6 +175,55 @@ impl<'a> ReActEngine<'a> {
                     }).to_string(),
                 }
             }
+            "kb_search" => {
+                let pid = args["product_id"].as_str().unwrap_or("hernest");
+                let q = args["query"].as_str().unwrap_or("");
+                let mcp = crate::mcp::McpClient::new(
+                    r"hernest-bcpe\target\release\kb.exe",
+                    &["serve".to_string(), "--db".to_string(), r"hernest-bcpe\kb.db".to_string()]
+                );
+                let call_args = serde_json::json!({ "product_id": pid, "query": q });
+                match mcp.call_tool("kb_search", &call_args) {
+                    Ok(res) => res.to_string(),
+                    Err(e) => serde_json::json!({"status": "error", "error": e}).to_string(),
+                }
+            }
+            "kb_propose" => {
+                let pid = args["product_id"].as_str().unwrap_or("hernest");
+                let subject_key = args["subject_key"].as_str().unwrap_or("");
+                let kind = args["kind"].as_str().unwrap_or("piege");
+                let title = args["title"].as_str().unwrap_or("");
+                let symptom = args["symptom"].as_str();
+                let cause = args["cause"].as_str();
+                let correction = args["correction"].as_str().unwrap_or("");
+                let example = args["example"].as_str();
+
+                let mcp = crate::mcp::McpClient::new(
+                    r"hernest-bcpe\target\release\kb.exe",
+                    &["serve".to_string(), "--db".to_string(), r"hernest-bcpe\kb.db".to_string()]
+                );
+
+                // Consultation préliminaire requise par BCPE pour traçabilité
+                mcp.call_tool("kb_search", &serde_json::json!({ "product_id": pid, "query": subject_key })).ok();
+
+                let mut propose_args = serde_json::json!({
+                    "product_id": pid,
+                    "subject_key": subject_key,
+                    "kind": kind,
+                    "source": "agent_discovery",
+                    "title": title,
+                    "correction": correction
+                });
+
+                if let Some(s) = symptom { propose_args["symptom"] = serde_json::json!(s); }
+                if let Some(c) = cause { propose_args["cause"] = serde_json::json!(c); }
+                if let Some(e) = example { propose_args["example"] = serde_json::json!(e); }
+
+                match mcp.call_tool("kb_propose", &propose_args) {
+                    Ok(res) => res.to_string(),
+                    Err(e) => serde_json::json!({"status": "error", "error": e}).to_string(),
+                }
+            }
             _ => serde_json::json!({"status": "error", "error": format!("Outil inconnu : {}", name)}).to_string(),
         }
     }
@@ -204,13 +253,14 @@ impl<'a> ReActEngine<'a> {
         }
 
         let system_prompt = format!(
-            "Tu es Hernest IDE, un ingénieur logiciel agentique d'élite (comparable à Claude Code et Antigravity) conçu pour coder en pair-programming direct. \
+            "Tu es Hernest IDE, un ingénieur logiciel agentique d'élite conçu pour coder en pair-programming direct. \
 Tu résous les problèmes de programmation avec une rigueur absolue :
-1. Lis d'abord le code source existant avec 'read_file' ou explore l'arborescence avec 'list_files' / 'grep_search' avant de modifier quoi que ce soit.
-2. Pour modifier un fichier, utilise 'edit_file' avec le bloc 'target' exact (incluant espaces et sauts de ligne).
-3. Utilise 'terminal_exec' pour lancer les builds, linters et tests unitaires (ex: 'cargo check', 'pytest', 'npm test').
-4. Utilise 'web_search' si tu as besoin de vérifier une documentation d'API récente.
-5. Utilise 'store_memory' pour retenir les choix d'architectures cruciaux ou règles de code afin de ne jamais les oublier.
+1. Avant d'écrire ou modifier du code sur une technologie spécifique ou de niche, consulte la Base de Connaissances d'Expérience avec 'kb_search' pour vérifier s'il existe des pièges ('piege') ou des règles ('regle') connus.
+2. Lis le code existant avec 'read_file' ou explore l'arborescence avec 'list_files' / 'grep_search' avant de modifier quoi que ce soit.
+3. Pour modifier un fichier, utilise 'edit_file' avec le bloc 'target' exact (incluant espaces et sauts de ligne).
+4. Utilise 'terminal_exec' pour lancer les builds, linters et tests unitaires (ex: 'cargo check', 'pytest', 'npm test').
+5. APPRENTISSAGE SYSTÉMATIQUE : Dès que tu découvres un bug vicieux, une difficulté résolue, une subtilité d'API ou un comportement inattendu (particulièrement sur des technologies de niche), ENREGISTRE-LE IMMÉDIATEMENT dans la base d'expérience via 'kb_propose' (avec product_id, subject_key, kind='piege'/'regle', title, symptom, cause, correction) afin que ni toi ni aucun autre agent ne reproduise cette erreur à l'avenir !
+6. Utilise 'store_memory' pour retenir les choix d'architectures cruciaux du projet.
 Reste concis, précis et concentré sur l'excellence du code produit.{}",
             memory_context
         );
