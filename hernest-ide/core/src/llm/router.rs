@@ -111,10 +111,24 @@ impl LLMRouter {
 
         for b in &self.backends {
             let client = LLMClient::new(&b.provider_type, &b.base_url, &b.model, b.api_key.clone());
-            match client.chat_completion(messages, tools) {
-                Ok(resp) => return Ok((resp, b.id.clone())),
-                Err(e) => {
-                    last_err = format!("Moteur {} échoué: {}", b.name, e);
+            
+            // Circuit Breaker & Exponential Retry (jusqu'à 3 tentatives par backend)
+            let mut attempts = 0;
+            let max_retries = 2;
+            let mut backoff_ms = 400;
+
+            loop {
+                match client.chat_completion(messages, tools) {
+                    Ok(resp) => return Ok((resp, b.id.clone())),
+                    Err(e) => {
+                        attempts += 1;
+                        last_err = format!("Moteur {} (tentative {}/{}) échoué: {}", b.name, attempts, max_retries + 1, e);
+                        if attempts > max_retries {
+                            break;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(backoff_ms));
+                        backoff_ms *= 2;
+                    }
                 }
             }
         }

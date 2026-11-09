@@ -54,3 +54,4 @@ pub fn extract_local_code_symbols(code: &str, lang: &str) -> Vec<Value> {
 
     items
 }
+

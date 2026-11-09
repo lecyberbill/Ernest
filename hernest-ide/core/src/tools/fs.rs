@@ -42,13 +42,32 @@ pub fn read_file(path_str: &str, start_line: Option<usize>, end_line: Option<usi
 }
 
 pub fn write_file(path_str: &str, content: &str) -> Result<Value, String> {
+    use std::io::Write;
     let path = PathBuf::from(path_str);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("Erreur création répertoires parents: {}", e))?;
     }
 
-    fs::write(&path, content)
-        .map_err(|e| format!("Erreur écriture fichier {}: {}", path_str, e))?;
+    // Écriture atomique sécurisée : fichier temporaire .tmp -> flush -> rename
+    let tmp_path = format!("{}.tmp.{}", path_str, &uuid::Uuid::new_v4().to_string().replace('-', "")[..6]);
+    {
+        let mut file = fs::File::create(&tmp_path)
+            .map_err(|e| format!("Erreur création fichier temporaire {}: {}", tmp_path, e))?;
+        file.write_all(content.as_bytes())
+            .map_err(|e| format!("Erreur écriture dans fichier temporaire {}: {}", tmp_path, e))?;
+        file.sync_all()
+            .map_err(|e| format!("Erreur sync disque fichier {}: {}", tmp_path, e))?;
+    }
+
+    // Remplacement atomique du fichier de destination
+    if let Err(err) = fs::rename(&tmp_path, &path) {
+        // Fallback sous Windows si le fichier est verrouillé ou écriture directe
+        if let Err(e2) = fs::write(&path, content) {
+            fs::remove_file(&tmp_path).ok();
+            return Err(format!("Erreur écriture finale fichier {}: {} (fallback: {})", path_str, err, e2));
+        }
+        fs::remove_file(&tmp_path).ok();
+    }
 
     Ok(serde_json::json!({
         "status": "success",
@@ -72,14 +91,7 @@ pub fn edit_file(path_str: &str, target: &str, replacement: &str) -> Result<Valu
     }
 
     let new_content = content.replace(target, replacement);
-    fs::write(&path, &new_content)
-        .map_err(|e| format!("Erreur écriture mise à jour {}: {}", path_str, e))?;
-
-    Ok(serde_json::json!({
-        "status": "success",
-        "path": path_str,
-        "replacements_count": count
-    }))
+    write_file(path_str, &new_content)
 }
 
 pub fn rename_file_or_dir(old_path_str: &str, new_path_str: &str) -> Result<Value, String> {

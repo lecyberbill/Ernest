@@ -92,3 +92,4 @@ pub fn handle_lsp_signatures(lang: &str, code: &str, line: u64, column: u64, pat
 
     Ok(serde_json::json!({ "signatures": [] }))
 }
+

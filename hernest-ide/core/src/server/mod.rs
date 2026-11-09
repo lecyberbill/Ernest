@@ -188,7 +188,10 @@ fn handle_request(mut req: tiny_http::Request) {
             }
             match std::fs::read_to_string(file_path) {
                 Ok(content) => {
-                    let resp = Response::from_string(serde_json::json!({"path": file_path, "content": content}).to_string())
+                    let mtime = std::fs::metadata(file_path).and_then(|m| m.modified()).map(|t| {
+                        t.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
+                    }).unwrap_or(0);
+                    let resp = Response::from_string(serde_json::json!({"path": file_path, "content": content, "mtime": mtime}).to_string())
                         .with_header(json_header)
                         .with_header(cors_header);
                     req.respond(resp).ok();
@@ -201,6 +204,32 @@ fn handle_request(mut req: tiny_http::Request) {
                     req.respond(resp).ok();
                 }
             }
+            return;
+        }
+
+        if path == "/api/ide/file/status" {
+            let file_path = query.get("path").map(|s| s.as_str()).unwrap_or("");
+            if file_path.is_empty() {
+                let resp = Response::from_string(serde_json::json!({"error": "path manquant"}).to_string())
+                    .with_status_code(400)
+                    .with_header(json_header)
+                    .with_header(cors_header);
+                req.respond(resp).ok();
+                return;
+            }
+
+            let mtime = std::fs::metadata(file_path).and_then(|m| m.modified()).map(|t| {
+                t.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
+            }).unwrap_or(0);
+
+            let resp = Response::from_string(serde_json::json!({
+                "path": file_path,
+                "exists": std::path::Path::new(file_path).exists(),
+                "mtime": mtime
+            }).to_string())
+            .with_header(json_header)
+            .with_header(cors_header);
+            req.respond(resp).ok();
             return;
         }
 
@@ -371,7 +400,12 @@ fn handle_request(mut req: tiny_http::Request) {
             let content = payload["content"].as_str().unwrap_or("");
             match write_file(file_path, content) {
                 Ok(res) => {
-                    let resp = Response::from_string(res.to_string()).with_header(json_header).with_header(cors_header);
+                    let mtime = std::fs::metadata(file_path).and_then(|m| m.modified()).map(|t| {
+                        t.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
+                    }).unwrap_or(0);
+                    let mut obj = res.as_object().cloned().unwrap_or_default();
+                    obj.insert("mtime".to_string(), serde_json::json!(mtime));
+                    let resp = Response::from_string(serde_json::json!(obj).to_string()).with_header(json_header).with_header(cors_header);
                     req.respond(resp).ok();
                 }
                 Err(e) => {

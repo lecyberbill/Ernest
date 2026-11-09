@@ -542,6 +542,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     content: data.content || '',
                     originalContent: data.content || '',
                     isModified: false,
+                    lastMtime: data.mtime || 0,
                     monacoModel
                 };
                 state.openTabs.push(existing);
@@ -616,6 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tab.originalContent = val;
                 tab.content = val;
                 tab.isModified = false;
+                if (data.mtime) tab.lastMtime = data.mtime;
                 renderTabs();
                 if (state.isDiffMode) updateDiffModels();
                 refreshGitStatus();
@@ -1175,34 +1177,70 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function bindTerminal(inputEl, outputEl) {
         inputEl.addEventListener('keydown', async (e) => {
+            if (e.key === 'c' && (e.ctrlKey || e.metaKey)) {
+                // Interruption de commande style Ctrl+C
+                const cancelLine = document.createElement('div');
+                cancelLine.style.color = 'var(--accent-amber)';
+                cancelLine.textContent = '^C (Interrompu)';
+                outputEl.appendChild(cancelLine);
+                outputEl.scrollTop = outputEl.scrollHeight;
+                inputEl.value = '';
+                return;
+            }
+
             if (e.key === 'Enter') {
                 const cmd = inputEl.value.trim();
                 if (!cmd) return;
                 inputEl.value = '';
                 const line = document.createElement('div');
+                line.style.color = 'var(--accent-cyan)';
                 line.textContent = `> ${cmd}`;
                 outputEl.appendChild(line);
+
+                const runningLine = document.createElement('div');
+                runningLine.style.color = 'var(--text-muted)';
+                runningLine.style.fontStyle = 'italic';
+                runningLine.textContent = '⏳ Exécution en cours... (Ctrl+C pour annuler)';
+                outputEl.appendChild(runningLine);
+                outputEl.scrollTop = outputEl.scrollHeight;
 
                 try {
                     const res = await fetch('/api/ide/terminal', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ command: cmd, timeout_secs: 45 })
+                        body: JSON.stringify({ command: cmd, timeout_secs: 60 })
                     });
                     const data = await res.json();
+                    runningLine.remove();
+
                     if (data.stdout) {
                         const outDiv = document.createElement('div');
+                        outDiv.style.whiteSpace = 'pre-wrap';
                         outDiv.textContent = data.stdout.trimEnd();
                         outputEl.appendChild(outDiv);
                     }
                     if (data.stderr) {
                         const errDiv = document.createElement('div');
+                        errDiv.style.whiteSpace = 'pre-wrap';
                         errDiv.style.color = 'var(--accent-rose)';
                         errDiv.textContent = data.stderr.trimEnd();
                         outputEl.appendChild(errDiv);
                     }
+
+                    const footerLine = document.createElement('div');
+                    footerLine.style.fontSize = '0.68rem';
+                    footerLine.style.color = data.exit_code === 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)';
+                    footerLine.textContent = `[Exit ${data.exit_code} en ${data.duration_ms}ms]`;
+                    outputEl.appendChild(footerLine);
+
                     outputEl.scrollTop = outputEl.scrollHeight;
-                } catch (err) {}
+                } catch (err) {
+                    runningLine.remove();
+                    const errDiv = document.createElement('div');
+                    errDiv.style.color = 'var(--accent-rose)';
+                    errDiv.textContent = `Erreur exécution: ${err.message}`;
+                    outputEl.appendChild(errDiv);
+                }
             }
         });
     }
@@ -1773,6 +1811,45 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // ====================================================
+    // 13. FILE WATCHER CLIENT-SIDE (DÉTECTION MODIFICATIONS EXTERNES)
+    // ====================================================
+    let isCheckingExternalModifs = false;
+    async function checkExternalModifications() {
+        if (isCheckingExternalModifs || state.openTabs.length === 0) return;
+        isCheckingExternalModifs = true;
+
+        try {
+            for (const tab of state.openTabs) {
+                if (!tab.path || tab.isModified) continue; // Si l'utilisateur est en train d'écrire localement, ne pas écraser
+                const res = await fetch(`/api/ide/file/status?path=${encodeURIComponent(tab.path)}`);
+                const data = await res.json();
+                if (data.exists && data.mtime && tab.lastMtime && data.mtime > tab.lastMtime) {
+                    // Le fichier a été modifié de l'extérieur par Git ou un outil tiers
+                    const fileRes = await fetch(`/api/ide/file?path=${encodeURIComponent(tab.path)}`);
+                    const fileData = await fileRes.json();
+                    if (fileData.content !== undefined && fileData.content !== tab.content) {
+                        tab.content = fileData.content;
+                        tab.originalContent = fileData.content;
+                        tab.lastMtime = data.mtime;
+                        tab.isModified = false;
+                        if (tab.monacoModel) {
+                            tab._suppressEvents = true;
+                            tab.monacoModel.setValue(fileData.content);
+                            tab._suppressEvents = false;
+                        }
+                        if (state.isDiffMode) updateDiffModels();
+                    }
+                }
+            }
+        } catch (e) {} finally {
+            isCheckingExternalModifs = false;
+        }
+    }
+
+    // Intervalle de vérification de modifications externes (toutes les 4 secondes)
+    setInterval(checkExternalModifications, 4000);
 
     // Démarrage initial
     initMonaco(async () => {
