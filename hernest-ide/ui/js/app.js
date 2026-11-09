@@ -131,6 +131,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const origin = window.location.origin;
         window.MonacoEnvironment = {
             getWorkerUrl: function(moduleId, label) {
+                if (label === 'typescript' || label === 'javascript') {
+                    const tsWorker = `
+                        self.MonacoEnvironment = { baseUrl: '${origin}/js/vendor/monaco/' };
+                        importScripts('${origin}/js/vendor/monaco/vs/language/typescript/tsWorker.js');
+                    `;
+                    return URL.createObjectURL(new Blob([tsWorker], { type: 'application/javascript' }));
+                }
                 const proxyWorker = `
                     self.MonacoEnvironment = {
                         baseUrl: '${origin}/js/vendor/monaco/'
@@ -142,7 +149,33 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         require.config({ paths: { 'vs': '/js/vendor/monaco/vs' } });
-        require(['vs/editor/editor.main'], function() {
+        require(['vs/editor/editor.main', 'vs/language/typescript/tsMode'], function() {
+            // Configuration TypeScript / JavaScript avancée (IntelliSense, JSX, ESNext)
+            if (monaco.languages.typescript) {
+                monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+                    noSemanticValidation: false,
+                    noSyntaxValidation: false
+                });
+                monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+                    noSemanticValidation: false,
+                    noSyntaxValidation: false
+                });
+                monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+                    target: monaco.languages.typescript.ScriptTarget.ESNext,
+                    allowNonTextExtensions: true,
+                    moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+                    module: monaco.languages.typescript.ModuleKind.CommonJS,
+                    noEmit: true,
+                    esModuleInterop: true,
+                    jsx: monaco.languages.typescript.JsxEmit.React,
+                    allowJs: true,
+                    typeRoots: ["node_modules/@types"]
+                });
+            }
+
+            // Enregistrement des providers LSP pour Python, Rust et langages courants
+            registerUniversalLspProviders();
+
             // S'assurer que le container a une géométrie calculée avant l'instanciation de Monaco
             requestAnimationFrame(() => {
                 editorInstance = monaco.editor.create(monacoEditorContainer, {
@@ -186,6 +219,183 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 if (callback) callback();
+            });
+        });
+    }
+
+    function registerUniversalLspProviders() {
+        const supportedLangs = ['python', 'rust', 'html', 'css', 'json', 'shell', 'sql', 'markdown'];
+
+        supportedLangs.forEach(lang => {
+            // 1. Completion Provider (Autocomplétion intelligente via backend LSP & indexer)
+            monaco.languages.registerCompletionItemProvider(lang, {
+                triggerCharacters: ['.', ':', '>', '/', '_'],
+                provideCompletionItems: async function(model, position) {
+                    const tab = getActiveTab();
+                    const filePath = tab ? tab.path : `file.${lang}`;
+                    const code = model.getValue();
+                    const line = position.lineNumber;
+                    const column = position.column;
+
+                    try {
+                        const res = await fetch('/api/ide/lsp/complete', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                language: lang,
+                                path: filePath,
+                                code,
+                                line,
+                                column
+                            })
+                        });
+                        const data = await res.json();
+                        const suggestions = (data.items || []).map(item => {
+                            let itemKind = monaco.languages.CompletionItemKind.Property;
+                            if (item.kind === 'function' || item.kind === 'statement') itemKind = monaco.languages.CompletionItemKind.Function;
+                            else if (item.kind === 'class' || item.kind === 'type') itemKind = monaco.languages.CompletionItemKind.Class;
+                            else if (item.kind === 'module') itemKind = monaco.languages.CompletionItemKind.Module;
+                            else if (item.kind === 'keyword') itemKind = monaco.languages.CompletionItemKind.Keyword;
+                            else if (item.kind === 'variable' || item.kind === 'param') itemKind = monaco.languages.CompletionItemKind.Variable;
+
+                            const word = model.getWordUntilPosition(position);
+                            const range = {
+                                startLineNumber: position.lineNumber,
+                                endLineNumber: position.lineNumber,
+                                startColumn: word.startColumn,
+                                endColumn: word.endColumn
+                            };
+
+                            return {
+                                label: item.label,
+                                kind: itemKind,
+                                detail: item.detail || '',
+                                documentation: item.doc ? { value: item.doc } : undefined,
+                                insertText: item.label,
+                                range
+                            };
+                        });
+
+                        return { suggestions };
+                    } catch (e) {
+                        return { suggestions: [] };
+                    }
+                }
+            });
+
+            // 2. Hover Provider (Documentation au survol)
+            monaco.languages.registerHoverProvider(lang, {
+                provideHover: async function(model, position) {
+                    const tab = getActiveTab();
+                    const filePath = tab ? tab.path : `file.${lang}`;
+                    const code = model.getValue();
+
+                    try {
+                        const res = await fetch('/api/ide/lsp/hover', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                language: lang,
+                                path: filePath,
+                                code,
+                                line: position.lineNumber,
+                                column: position.column
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.contents && data.contents.length > 0) {
+                            return {
+                                range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+                                contents: data.contents.map(c => ({ value: c }))
+                            };
+                        }
+                    } catch (e) {}
+                    return null;
+                }
+            });
+
+            // 3. Definition Provider (F12 / Ctrl+Click Aller à la définition)
+            monaco.languages.registerDefinitionProvider(lang, {
+                provideDefinition: async function(model, position) {
+                    const tab = getActiveTab();
+                    const filePath = tab ? tab.path : `file.${lang}`;
+                    const code = model.getValue();
+                    const word = model.getWordAtPosition(position);
+                    const symbol = word ? word.word : '';
+
+                    try {
+                        const res = await fetch('/api/ide/lsp/definition', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                language: lang,
+                                root: state.currentRoot,
+                                path: filePath,
+                                symbol,
+                                code,
+                                line: position.lineNumber,
+                                column: position.column
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.definitions && data.definitions.length > 0) {
+                            const def = data.definitions[0];
+                            const targetFile = def.file;
+                            const targetLine = def.line || 1;
+                            const targetCol = def.column || 1;
+
+                            // Ouvrir le fichier cible s'il est différent
+                            if (targetFile && targetFile !== filePath && !targetFile.endsWith('unknown')) {
+                                await openFile(targetFile);
+                            }
+
+                            return {
+                                uri: (editorInstance && editorInstance.getModel()) ? editorInstance.getModel().uri : model.uri,
+                                range: new monaco.Range(targetLine, targetCol, targetLine, targetCol + symbol.length)
+                            };
+                        }
+                    } catch (e) {}
+                    return null;
+                }
+            });
+
+            // 4. Signature Help Provider (Assistance aux paramètres lors de la frappe d'appels '(' ou ',')
+            monaco.languages.registerSignatureHelpProvider(lang, {
+                signatureHelpTriggerCharacters: ['(', ','],
+                provideSignatureHelp: async function(model, position) {
+                    const tab = getActiveTab();
+                    const filePath = tab ? tab.path : `file.${lang}`;
+                    const code = model.getValue();
+
+                    try {
+                        const res = await fetch('/api/ide/lsp/signatures', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                language: lang,
+                                path: filePath,
+                                code,
+                                line: position.lineNumber,
+                                column: position.column
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.signatures && data.signatures.length > 0) {
+                            return {
+                                value: {
+                                    activeSignature: 0,
+                                    activeParameter: data.signatures[0].activeParameter || 0,
+                                    signatures: data.signatures.map(s => ({
+                                        label: s.label,
+                                        parameters: (s.parameters || []).map(p => ({ label: p }))
+                                    }))
+                                },
+                                dispose: () => {}
+                            };
+                        }
+                    } catch (e) {}
+                    return null;
+                }
             });
         });
     }

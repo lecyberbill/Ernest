@@ -577,6 +577,101 @@ Garde l'indentation appropriée.";
             return;
         }
 
+        if path == "/api/ide/lsp/complete" {
+            let lang = payload["language"].as_str().unwrap_or("plaintext");
+            let code = payload["code"].as_str().unwrap_or("");
+            let line = payload["line"].as_u64().unwrap_or(1);
+            let column = payload["column"].as_u64().unwrap_or(1);
+            let file_path = payload["path"].as_str().unwrap_or("unknown");
+
+            // Chercher l'interpréteur python configuré
+            let conn = get_connection(None).unwrap();
+            let py_interp: Option<String> = conn.query_row("SELECT value FROM app_settings WHERE key = 'python_interpreter'", [], |r| r.get(0)).ok();
+
+            let res = crate::lsp::handle_lsp_complete(lang, code, line, column, file_path, py_interp);
+            let out = match res {
+                Ok(val) => val,
+                Err(err) => serde_json::json!({"error": err, "items": []})
+            };
+
+            let resp = Response::from_string(out.to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/ide/lsp/hover" {
+            let lang = payload["language"].as_str().unwrap_or("plaintext");
+            let code = payload["code"].as_str().unwrap_or("");
+            let line = payload["line"].as_u64().unwrap_or(1);
+            let column = payload["column"].as_u64().unwrap_or(1);
+            let file_path = payload["path"].as_str().unwrap_or("unknown");
+
+            let conn = get_connection(None).unwrap();
+            let py_interp: Option<String> = conn.query_row("SELECT value FROM app_settings WHERE key = 'python_interpreter'", [], |r| r.get(0)).ok();
+
+            let res = crate::lsp::handle_lsp_hover(lang, code, line, column, file_path, py_interp);
+            let out = match res {
+                Ok(val) => val,
+                Err(err) => serde_json::json!({"error": err, "contents": []})
+            };
+
+            let resp = Response::from_string(out.to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/ide/lsp/definition" {
+            let lang = payload["language"].as_str().unwrap_or("plaintext");
+            let root = payload["root"].as_str().unwrap_or(".");
+            let path_str = payload["path"].as_str().unwrap_or("unknown");
+            let symbol = payload["symbol"].as_str().unwrap_or("");
+            let code = payload["code"].as_str().unwrap_or("");
+            let line = payload["line"].as_u64().unwrap_or(1);
+            let column = payload["column"].as_u64().unwrap_or(1);
+
+            let conn = get_connection(None).unwrap();
+            let py_interp: Option<String> = conn.query_row("SELECT value FROM app_settings WHERE key = 'python_interpreter'", [], |r| r.get(0)).ok();
+
+            let res = crate::lsp::handle_lsp_definition(lang, root, path_str, symbol, code, line, column, py_interp);
+            let out = match res {
+                Ok(val) => val,
+                Err(err) => serde_json::json!({"error": err, "definitions": []})
+            };
+
+            let resp = Response::from_string(out.to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/ide/lsp/signatures" {
+            let lang = payload["language"].as_str().unwrap_or("plaintext");
+            let code = payload["code"].as_str().unwrap_or("");
+            let line = payload["line"].as_u64().unwrap_or(1);
+            let column = payload["column"].as_u64().unwrap_or(1);
+            let file_path = payload["path"].as_str().unwrap_or("unknown");
+
+            let conn = get_connection(None).unwrap();
+            let py_interp: Option<String> = conn.query_row("SELECT value FROM app_settings WHERE key = 'python_interpreter'", [], |r| r.get(0)).ok();
+
+            let res = crate::lsp::handle_lsp_signatures(lang, code, line, column, file_path, py_interp);
+            let out = match res {
+                Ok(val) => val,
+                Err(err) => serde_json::json!({"error": err, "signatures": []})
+            };
+
+            let resp = Response::from_string(out.to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
         if path == "/api/ide/settings" {
             let conn = get_connection(None).unwrap();
             if let Some(obj) = payload.as_object() {

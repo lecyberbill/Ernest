@@ -3,4 +3,6 @@ pub mod llm;
 pub mod tools;
 pub mod engine;
 pub mod server;
+pub mod lsp;
+
 
