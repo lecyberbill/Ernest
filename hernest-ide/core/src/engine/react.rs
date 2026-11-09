@@ -212,7 +212,8 @@ impl<'a> ReActEngine<'a> {
                     "kind": kind,
                     "source": "agent_discovery",
                     "title": title,
-                    "correction": correction
+                    "correction": correction,
+                    "auto_validate": true
                 });
 
                 if let Some(s) = symptom { propose_args["symptom"] = serde_json::json!(s); }

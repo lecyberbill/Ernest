@@ -131,6 +131,8 @@ pub struct ProposeInput {
     pub incident_id: Option<i64>,
     #[serde(default)]
     pub expected_version: Option<i64>,
+    #[serde(default)]
+    pub auto_validate: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]

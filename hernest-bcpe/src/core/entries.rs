@@ -314,7 +314,19 @@ pub fn propose(
             replace_identifiers(&tx, new_id, &input.product_id, &identifiers)?;
             replace_depends_on(&tx, new_id, &input.depends_on)?;
             update_fts(&tx, new_id)?;
-            (new_id, 1, "non_teste".to_string())
+
+            // Auto-validation immédiate si prouvé par l'agent
+            let final_status = if input.auto_validate.unwrap_or(false) {
+                tx.execute(
+                    "UPDATE entries SET status='valide', validated_by=?1, validated_at=?2, updated_at=?2 WHERE entry_id=?3",
+                    params![format!("agent:auto_test:{}", ctx.actor), timestamp, new_id],
+                ).map_err(KbError::Db)?;
+                "valide".to_string()
+            } else {
+                "non_teste".to_string()
+            };
+
+            (new_id, 1, final_status)
         }
         Some(current) => {
             match current.status.as_str() {

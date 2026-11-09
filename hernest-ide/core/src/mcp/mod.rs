@@ -51,3 +51,4 @@ impl McpClient {
         Ok(val.get("result").cloned().unwrap_or(serde_json::json!({})))
     }
 }
+
