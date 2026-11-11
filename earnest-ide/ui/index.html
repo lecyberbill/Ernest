@@ -632,6 +632,9 @@
                         <line x1="12" y1="17" x2="12.01" y2="17"></line>
                     </svg>
                 </button>
+                <button class="activity-btn" id="act-btn-kb" title="Base d'Expérience & Vérités (BCPE)">
+                    <span style="font-size: 1.15rem; line-height: 1;">🧠</span>
+                </button>
                 <div style="flex: 1;"></div>
                 <button class="activity-btn" id="act-btn-settings" title="Préférences Générales">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -695,6 +698,11 @@
                         <div class="sidebar-body" id="diagnostics-list" style="padding: 0.4rem;">
                             <div style="color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 1rem;">Aucune erreur détectée</div>
                         </div>
+                    </div>
+
+                    <!-- Vue KB : Base d'Expérience Interactive -->
+                    <div class="sidebar-view" id="view-kb" style="flex: 1; height: 100%;">
+                        <!-- Rendu par KbView JS -->
                     </div>
 
                     <!-- Vue E : Préférences & Paramètres Modèles -->
@@ -986,6 +994,6 @@
         </div>
     </div>
 
-    <script src="js/app.js"></script>
+    <script type="module" src="js/app.js"></script>
 </body>
 </html>

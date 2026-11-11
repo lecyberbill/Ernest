@@ -467,6 +467,103 @@ fn handle_request(mut req: tiny_http::Request) {
             req.respond(resp).ok();
             return;
         }
+
+        // --- BASE DE CONNAISSANCES D'EXPÉRIENCE (BCPE) : LISTE & RECHERCHE ---
+        if path == "/api/ide/kb/entries" {
+            let q_filter = query.get("q").map(|s| s.to_lowercase()).unwrap_or_default();
+            let kind_filter = query.get("kind").map(|s| s.as_str()).unwrap_or("");
+            let status_filter = query.get("status").map(|s| s.as_str()).unwrap_or("");
+
+            // Chercher la base kb.db (relatif ou dans earnest-bcpe)
+            let kb_candidates = vec![
+                PathBuf::from("earnest-bcpe/kb.db"),
+                PathBuf::from("../earnest-bcpe/kb.db"),
+                PathBuf::from("../../earnest-bcpe/kb.db"),
+                PathBuf::from("kb.db"),
+            ];
+
+            let mut kb_path = PathBuf::from("earnest-bcpe/kb.db");
+            for cand in kb_candidates {
+                if cand.exists() {
+                    kb_path = cand;
+                    break;
+                }
+            }
+
+            if !kb_path.exists() {
+                let resp = Response::from_string(serde_json::json!({
+                    "entries": [],
+                    "total": 0,
+                    "kb_path": kb_path.to_string_lossy(),
+                    "warning": "Base de connaissances kb.db non trouvée."
+                }).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+                req.respond(resp).ok();
+                return;
+            }
+
+            let mut items = Vec::new();
+            if let Ok(conn) = rusqlite::Connection::open(&kb_path) {
+                let sql = "SELECT entry_id, product_id, subject_key, kind, title, symptom, cause, correction, example, status, source, validated_by, validated_at, use_count, fail_count, updated_at FROM entries ORDER BY entry_id DESC";
+                if let Ok(mut stmt) = conn.prepare(sql) {
+                    let rows = stmt.query_map([], |row| {
+                        Ok(serde_json::json!({
+                            "entry_id": row.get::<_, i64>(0)?,
+                            "product_id": row.get::<_, String>(1)?,
+                            "subject_key": row.get::<_, String>(2)?,
+                            "kind": row.get::<_, String>(3)?,
+                            "title": row.get::<_, String>(4)?,
+                            "symptom": row.get::<_, Option<String>>(5)?,
+                            "cause": row.get::<_, Option<String>>(6)?,
+                            "correction": row.get::<_, String>(7)?,
+                            "example": row.get::<_, Option<String>>(8)?,
+                            "status": row.get::<_, String>(9)?,
+                            "source": row.get::<_, String>(10)?,
+                            "validated_by": row.get::<_, Option<String>>(11)?,
+                            "validated_at": row.get::<_, Option<String>>(12)?,
+                            "use_count": row.get::<_, i64>(13)?,
+                            "fail_count": row.get::<_, i64>(14)?,
+                            "updated_at": row.get::<_, String>(15)?,
+                        }))
+                    });
+
+                    if let Ok(mapped) = rows {
+                        for item in mapped.flatten() {
+                            let title = item["title"].as_str().unwrap_or("").to_lowercase();
+                            let symptom = item["symptom"].as_str().unwrap_or("").to_lowercase();
+                            let cause = item["cause"].as_str().unwrap_or("").to_lowercase();
+                            let correction = item["correction"].as_str().unwrap_or("").to_lowercase();
+                            let item_kind = item["kind"].as_str().unwrap_or("");
+                            let item_status = item["status"].as_str().unwrap_or("");
+
+                            // Filtres
+                            if !kind_filter.is_empty() && item_kind != kind_filter {
+                                continue;
+                            }
+                            if !status_filter.is_empty() && item_status != status_filter {
+                                continue;
+                            }
+                            if !q_filter.is_empty() && !title.contains(&q_filter) && !symptom.contains(&q_filter) && !cause.contains(&q_filter) && !correction.contains(&q_filter) {
+                                continue;
+                            }
+
+                            items.push(item);
+                        }
+                    }
+                }
+            }
+
+            let resp = Response::from_string(serde_json::json!({
+                "entries": items,
+                "total": items.len(),
+                "kb_path": kb_path.to_string_lossy()
+            }).to_string())
+            .with_header(json_header)
+            .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
     }
 
     // 2. ENDPOINTS POST
@@ -1091,6 +1188,154 @@ Garde l'indentation appropriée.";
                 "probe_id": failed_probe_id,
                 "message": format!("Tentative supplémentaire autorisée pour la sonde '{}'.", failed_probe_id)
             }).to_string()).with_header(json_header).with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        // --- BASE DE CONNAISSANCES D'EXPÉRIENCE (BCPE) : ANNOTATION & VALIDATION ---
+        if path == "/api/ide/kb/annotate" {
+            let entry_id = payload["entry_id"].as_i64().unwrap_or(0);
+            let new_status = payload["status"].as_str().unwrap_or("valide");
+            let annotator = payload["annotator"].as_str().unwrap_or("developer");
+            let correction = payload["correction"].as_str();
+
+            let kb_candidates = vec![
+                PathBuf::from("earnest-bcpe/kb.db"),
+                PathBuf::from("../earnest-bcpe/kb.db"),
+                PathBuf::from("../../earnest-bcpe/kb.db"),
+                PathBuf::from("kb.db"),
+            ];
+            let mut kb_path = PathBuf::from("earnest-bcpe/kb.db");
+            for cand in kb_candidates {
+                if cand.exists() {
+                    kb_path = cand;
+                    break;
+                }
+            }
+
+            if let Ok(conn) = rusqlite::Connection::open(&kb_path) {
+                let now = chrono::Utc::now().to_rfc3339();
+                let res = if let Some(corr) = correction {
+                    conn.execute(
+                        "UPDATE entries SET status = ?, validated_by = ?, validated_at = ?, correction = ?, updated_at = ? WHERE entry_id = ?",
+                        rusqlite::params![new_status, annotator, now, corr, now, entry_id],
+                    )
+                } else {
+                    conn.execute(
+                        "UPDATE entries SET status = ?, validated_by = ?, validated_at = ?, updated_at = ? WHERE entry_id = ?",
+                        rusqlite::params![new_status, annotator, now, now, entry_id],
+                    )
+                };
+
+                match res {
+                    Ok(affected) => {
+                        let resp = Response::from_string(serde_json::json!({
+                            "status": "OK",
+                            "affected": affected,
+                            "entry_id": entry_id,
+                            "new_status": new_status,
+                            "validated_by": annotator,
+                            "validated_at": now
+                        }).to_string()).with_header(json_header).with_header(cors_header);
+                        req.respond(resp).ok();
+                        return;
+                    }
+                    Err(e) => {
+                        let resp = Response::from_string(serde_json::json!({"status": "error", "error": e.to_string()}).to_string())
+                            .with_status_code(500).with_header(json_header).with_header(cors_header);
+                        req.respond(resp).ok();
+                        return;
+                    }
+                }
+            }
+
+            let resp = Response::from_string(serde_json::json!({"status": "error", "error": "kb.db inaccessible"}).to_string())
+                .with_status_code(500).with_header(json_header).with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        // --- BASE DE CONNAISSANCES D'EXPÉRIENCE (BCPE) : CRÉATION D'UNE RÈGLE/PIÈGE ---
+        if path == "/api/ide/kb/create" {
+            let product_id = payload["product_id"].as_str().unwrap_or("earnest");
+            let kind = payload["kind"].as_str().unwrap_or("regle");
+            let title = payload["title"].as_str().unwrap_or("").trim();
+            let symptom = payload["symptom"].as_str().unwrap_or("").trim();
+            let cause = payload["cause"].as_str().unwrap_or("").trim();
+            let correction = payload["correction"].as_str().unwrap_or("").trim();
+            let example = payload["example"].as_str().unwrap_or("").trim();
+            let author = payload["author"].as_str().unwrap_or("developer");
+
+            if title.is_empty() || correction.is_empty() {
+                let resp = Response::from_string(serde_json::json!({"status": "error", "error": "Le titre et la solution sont obligatoires"}).to_string())
+                    .with_status_code(400).with_header(json_header).with_header(cors_header);
+                req.respond(resp).ok();
+                return;
+            }
+
+            let kb_candidates = vec![
+                PathBuf::from("earnest-bcpe/kb.db"),
+                PathBuf::from("../earnest-bcpe/kb.db"),
+                PathBuf::from("../../earnest-bcpe/kb.db"),
+                PathBuf::from("kb.db"),
+            ];
+            let mut kb_path = PathBuf::from("earnest-bcpe/kb.db");
+            for cand in kb_candidates {
+                if cand.exists() {
+                    kb_path = cand;
+                    break;
+                }
+            }
+
+            let subject_key = format!("usr_{}", &uuid::Uuid::new_v4().to_string().replace('-', "")[..10]);
+            let now = chrono::Utc::now().to_rfc3339();
+
+            if let Ok(conn) = rusqlite::Connection::open(&kb_path) {
+                conn.execute(
+                    "INSERT OR IGNORE INTO products (product_id, name, current_version) VALUES (?, ?, ?)",
+                    rusqlite::params![product_id, product_id, "1.0.0"],
+                ).ok();
+
+                let res = conn.execute(
+                    "INSERT INTO entries (product_id, subject_key, kind, title, symptom, cause, correction, example, status, source, validated_by, validated_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'valide', 'human_expert', ?, ?, ?, ?)",
+                    rusqlite::params![
+                        product_id,
+                        subject_key,
+                        kind,
+                        title,
+                        if symptom.is_empty() { None } else { Some(symptom) },
+                        if cause.is_empty() { None } else { Some(cause) },
+                        correction,
+                        if example.is_empty() { None } else { Some(example) },
+                        author,
+                        now,
+                        now,
+                        now
+                    ],
+                );
+
+                match res {
+                    Ok(_) => {
+                        let last_id = conn.last_insert_rowid();
+                        let resp = Response::from_string(serde_json::json!({
+                            "status": "CREATED",
+                            "entry_id": last_id,
+                            "subject_key": subject_key
+                        }).to_string()).with_header(json_header).with_header(cors_header);
+                        req.respond(resp).ok();
+                        return;
+                    }
+                    Err(e) => {
+                        let resp = Response::from_string(serde_json::json!({"status": "error", "error": e.to_string()}).to_string())
+                            .with_status_code(500).with_header(json_header).with_header(cors_header);
+                        req.respond(resp).ok();
+                        return;
+                    }
+                }
+            }
+
+            let resp = Response::from_string(serde_json::json!({"status": "error", "error": "kb.db inaccessible"}).to_string())
+                .with_status_code(500).with_header(json_header).with_header(cors_header);
             req.respond(resp).ok();
             return;
         }

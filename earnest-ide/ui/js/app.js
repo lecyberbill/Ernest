@@ -1,3 +1,5 @@
+import { KbView } from './components/kb-view.js';
+
 document.addEventListener('DOMContentLoaded', () => {
     // État global de Earnest IDE
     const state = {
@@ -25,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const actBtnSearch = document.getElementById('act-btn-search');
     const actBtnGit = document.getElementById('act-btn-git');
     const actBtnDiagnostics = document.getElementById('act-btn-diagnostics');
+    const actBtnKb = document.getElementById('act-btn-kb');
     const actBtnSettings = document.getElementById('act-btn-settings');
     const btnOpenSettings = document.getElementById('btn-open-settings');
 
@@ -32,7 +35,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const viewSearch = document.getElementById('view-search');
     const viewGit = document.getElementById('view-git');
     const viewDiagnostics = document.getElementById('view-diagnostics');
+    const viewKb = document.getElementById('view-kb');
     const viewSettings = document.getElementById('view-settings');
+
+    let kbViewInstance = null;
 
     // DOM Elements - Preferences & Models Management
     const prefDefaultModel = document.getElementById('pref-default-model');
@@ -658,8 +664,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // ====================================================
     function switchSidebarView(viewName) {
         state.activeSidebarTab = viewName;
-        [actBtnExplorer, actBtnSearch, actBtnGit, actBtnDiagnostics, actBtnSettings].forEach(btn => btn && btn.classList.remove('active'));
-        [viewExplorer, viewSearch, viewGit, viewDiagnostics, viewSettings].forEach(v => v && v.classList.remove('active'));
+        [actBtnExplorer, actBtnSearch, actBtnGit, actBtnDiagnostics, actBtnKb, actBtnSettings].forEach(btn => btn && btn.classList.remove('active'));
+        [viewExplorer, viewSearch, viewGit, viewDiagnostics, viewKb, viewSettings].forEach(v => v && v.classList.remove('active'));
 
         if (viewName === 'explorer') {
             actBtnExplorer.classList.add('active');
@@ -676,6 +682,16 @@ document.addEventListener('DOMContentLoaded', () => {
             actBtnDiagnostics.classList.add('active');
             viewDiagnostics.classList.add('active');
             refreshDiagnostics();
+        } else if (viewName === 'kb') {
+            if (actBtnKb) actBtnKb.classList.add('active');
+            if (viewKb) {
+                viewKb.classList.add('active');
+                if (!kbViewInstance) {
+                    kbViewInstance = new KbView('view-kb');
+                } else {
+                    kbViewInstance.loadEntries();
+                }
+            }
         } else if (viewName === 'settings') {
             if (actBtnSettings) actBtnSettings.classList.add('active');
             if (viewSettings) viewSettings.classList.add('active');
@@ -687,6 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
     actBtnSearch.addEventListener('click', () => switchSidebarView('search'));
     actBtnGit.addEventListener('click', () => switchSidebarView('git'));
     actBtnDiagnostics.addEventListener('click', () => switchSidebarView('diagnostics'));
+    if (actBtnKb) actBtnKb.addEventListener('click', () => switchSidebarView('kb'));
     if (actBtnSettings) actBtnSettings.addEventListener('click', () => switchSidebarView('settings'));
     if (btnOpenSettings) btnOpenSettings.addEventListener('click', () => switchSidebarView('settings'));
 
