@@ -1244,34 +1244,41 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="font-size:0.65rem; color:var(--text-muted); font-family:var(--font-mono); margin-top:1px;">${escapeHtml(diag.file)}</div>
                 `;
                 
-                // Clic sur l'élément : Ouvre le fichier et saute à la ligne
-                item.addEventListener('click', async (e) => {
-                    if (e.target.classList.contains('btn-fix-with-ai')) return;
-                    await openFile(diag.file);
-                    if (editorInstance) {
-                        editorInstance.revealLineInCenter(diag.line);
-                        editorInstance.setPosition({ lineNumber: diag.line, column: diag.column });
-                    }
-                });
-
-                // Clic sur "⚡ Corriger" : Ouvre le fichier ET envoie la consigne au Copilote
-                const btnFix = item.querySelector('.btn-fix-with-ai');
-                if (btnFix) {
-                    btnFix.addEventListener('click', async (e) => {
-                        e.stopPropagation();
+                const attachEvents = (element) => {
+                    // Clic n'importe où sur l'élément : Ouvre le fichier et saute à la ligne
+                    element.addEventListener('click', async (e) => {
+                        if (e.target.classList.contains('btn-fix-with-ai')) return;
                         await openFile(diag.file);
                         if (editorInstance) {
                             editorInstance.revealLineInCenter(diag.line);
                             editorInstance.setPosition({ lineNumber: diag.line, column: diag.column });
                         }
-                        if (agentPrompt) {
-                            agentPrompt.value = `Corrige ce problème détecté dans ${diag.file} à la ligne ${diag.line} :\n[${diag.severity}] ${diag.message}`;
-                            agentPrompt.focus();
-                        }
                     });
-                }
-                diagnosticsListEl.appendChild(item.cloneNode(true));
-                bottomProblemsContent.appendChild(item);
+
+                    // Clic sur "⚡ Corriger" : Ouvre le fichier ET envoie la consigne au Copilote
+                    const btnFix = element.querySelector('.btn-fix-with-ai');
+                    if (btnFix) {
+                        btnFix.addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            await openFile(diag.file);
+                            if (editorInstance) {
+                                editorInstance.revealLineInCenter(diag.line);
+                                editorInstance.setPosition({ lineNumber: diag.line, column: diag.column });
+                            }
+                            if (agentPrompt) {
+                                agentPrompt.value = `Corrige ce problème détecté dans ${diag.file} à la ligne ${diag.line} :\n[${diag.severity}] ${diag.message}`;
+                                agentPrompt.focus();
+                            }
+                        });
+                    }
+                };
+
+                const itemClone = item.cloneNode(true);
+                attachEvents(item);
+                attachEvents(itemClone);
+
+                diagnosticsListEl.appendChild(item);
+                bottomProblemsContent.appendChild(itemClone);
             });
             // Monaco Markers: Appliquer les marqueurs (soulignements ondulés)
             if (window.monaco && editorInstance && editorInstance.getModel()) {
