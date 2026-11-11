@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "earnest"
+version = "0.1.0"
+description = "Experience-driven Agentic Runtime & Nested Engineering with Sealed Truths"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Earnest Platform", email = "contact@earnest.dev" }
+]
+dependencies = [
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
