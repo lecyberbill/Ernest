@@ -6,7 +6,7 @@
       "id": "INV-01-SCHEMA-SQLITE",
       "statement": "La base SQLite contient exactement les 6 tables requises : app_settings, tools, memories, scheduled_tasks, runs, run_traces avec leurs contraintes et index.",
       "component": "persistence/db",
-      "executable_probe": "python -c \"import sqlite3, os; conn=sqlite3.connect(os.path.expanduser('~/.local/share/agent-manager/data.db')); tables = [r[0] for r in conn.execute(\\\"SELECT name FROM sqlite_master WHERE type='table'\\\").fetchall()]; expected = {'app_settings', 'tools', 'memories', 'scheduled_tasks', 'runs', 'run_traces'}; missing = expected - set(tables); assert not missing, f'Missing tables: {missing}'; print('OK')\"",
+      "executable_probe": "python -c \"from earnest.db.connection import init_db; conn = init_db(); tables = [r[0] for r in conn.execute(\\\"SELECT name FROM sqlite_master WHERE type='table'\\\").fetchall()]; expected = {'app_settings', 'tools', 'memories', 'scheduled_tasks', 'runs', 'run_traces'}; missing = expected - set(tables); assert not missing, f'Missing tables: {missing}'; print('OK')\"",
       "expected_output": "OK"
     },
     {
