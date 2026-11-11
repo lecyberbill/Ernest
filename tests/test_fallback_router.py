@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 import pytest
-from hernest.llm.router import LLMFallbackRouter
-from hernest.llm.client import LLMProviderError
+from earnest.llm.router import LLMFallbackRouter
+from earnest.llm.client import LLMProviderError
 
 def test_fallback_router_switches_on_failure():
     backends = [

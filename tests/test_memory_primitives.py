@@ -1,8 +1,8 @@
 import tempfile
 import sqlite3
 import pytest
-from hernest.db.connection import init_db
-from hernest.db.memories import MemoryService
+from earnest.db.connection import init_db
+from earnest.db.memories import MemoryService
 
 @pytest.fixture
 def memory_service():

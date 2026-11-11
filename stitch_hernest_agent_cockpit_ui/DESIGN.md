@@ -238,7 +238,7 @@ The design system maintains a technical, industrial silhouette with restrained c
 ### Inputs & Command Terminal
 - **Prompt & Param Input:** Background `rgba(10, 15, 29, 0.8)`, border `1px solid #334155`, text `#f8fafc`, placeholder `#475569`.
 - **Focus State:** Border shifts to `#6366f1` with an outer glow `0 0 0 1px #6366f1, 0 0 10px rgba(99, 102, 241, 0.25)`.
-- Includes leading agent context tag (e.g., `agent:hernest-core$`) in `JetBrains Mono` Amber.
+- Includes leading agent context tag (e.g., `agent:earnest-core$`) in `JetBrains Mono` Amber.
 
 ### Cards & Execution Nodes
 - Layered glassmorphic container: `backdrop-filter: blur(12px)`, background `rgba(15, 23, 42, 0.7)`.

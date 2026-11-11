@@ -1,6 +1,6 @@
 {
   "version": "1.1.0",
-  "project": "Hernest - Assistant Agentique Modulaire Local-First (Sans Démon)",
+  "project": "Earnest - Assistant Agentique Modulaire Local-First (Sans Démon)",
   "invariants": [
     {
       "id": "INV-01-SCHEMA-SQLITE",
@@ -13,14 +13,14 @@
       "id": "INV-02-NO-DAEMON",
       "statement": "Le runner CLI s'exécute en mode run-to-completion et se termine proprement avec exit code 0 sans laisser de thread d'écoute, serveur de fond ou boucle infinie.",
       "component": "cli/runner",
-      "executable_probe": "python -m hernest.cli run --prompt \"test prompt\" --project \"d:\\Projet\\Hernest\" --test-dry-run",
+      "executable_probe": "python -m earnest.cli run --prompt \"test prompt\" --project \"d:\\Projet\\Earnest\" --test-dry-run",
       "expected_output": "EXIT_0"
     },
     {
       "id": "INV-03-CORE-TOOLS-SCHEMA",
       "statement": "Les primitives système fondamentales (store_memory, recall_memory, sandbox_exec, register_tool, terminal_exec, web_fetch) sont définies, exposent un schéma JSON valide et sont disponibles pour le LLM.",
       "component": "core/tools",
-      "executable_probe": "python -c \"from hernest.tools.primitives import get_primitive_tools; tools = get_primitive_tools(); names = {t['name'] for t in tools}; expected = {'store_memory', 'recall_memory', 'sandbox_exec', 'register_tool', 'terminal_exec', 'web_fetch'}; assert expected.issubset(names); print('OK')\"",
+      "executable_probe": "python -c \"from earnest.tools.primitives import get_primitive_tools; tools = get_primitive_tools(); names = {t['name'] for t in tools}; expected = {'store_memory', 'recall_memory', 'sandbox_exec', 'register_tool', 'terminal_exec', 'web_fetch'}; assert expected.issubset(names); print('OK')\"",
       "expected_output": "OK"
     },
     {
@@ -55,7 +55,7 @@
       "id": "INV-08-NO-UNAUTHORIZED-EXTERNAL-PROCESS",
       "statement": "Aucun processus externe ni appel réseau non documenté n'est exécuté en dehors de l'appel LLM configuré (Ollama/OpenAI compatible), des outils documentés (sandbox_exec, terminal_exec sécurisé, web_fetch, web_search, client MCP) ou de schtasks/cron.",
       "component": "security/probe",
-      "executable_probe": "python -c \"import re, glob; patterns = [r'subprocess\\.Popen', r'subprocess\\.run', r'os\\.system', r'requests\\.', r'urllib\\.']; files = [f for f in glob.glob('hernest/**/*.py', recursive=True) if 'sandbox' not in f and 'os_scheduler' not in f and 'llm' not in f and 'terminal' not in f and 'web' not in f and 'search' not in f and 'mcp' not in f]; violations = [(f, p) for f in files for p in patterns if re.search(p, open(f, 'r', encoding='utf-8').read())]; assert not violations, f'Violations found: {violations}'; print('CLEAN')\"",
+      "executable_probe": "python -c \"import re, glob; patterns = [r'subprocess\\.Popen', r'subprocess\\.run', r'os\\.system', r'requests\\.', r'urllib\\.']; files = [f for f in glob.glob('earnest/**/*.py', recursive=True) if 'sandbox' not in f and 'os_scheduler' not in f and 'llm' not in f and 'terminal' not in f and 'web' not in f and 'search' not in f and 'mcp' not in f]; violations = [(f, p) for f in files for p in patterns if re.search(p, open(f, 'r', encoding='utf-8').read())]; assert not violations, f'Violations found: {violations}'; print('CLEAN')\"",
       "expected_output": "CLEAN"
     },
     {

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hernest • Station d'Opérations Agentiques</title>
+    <title>Earnest • Station d'Opérations Agentiques</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -18,15 +18,15 @@
     <script>
         (function() {
             const isCustomScheme = window.location.protocol === 'tauri:' || window.location.protocol === 'file:' || window.location.hostname === 'tauri.localhost';
-            window.__HERNEST_API_BASE__ = isCustomScheme ? 'http://127.0.0.1:8080' : window.location.origin;
+            window.__EARNEST_API_BASE__ = isCustomScheme ? 'http://127.0.0.1:8080' : window.location.origin;
             
             // Interception native de fetch pour rediriger automatiquement /api/* vers http://127.0.0.1:8080 en mode Desktop
             const origFetch = window.fetch;
             window.fetch = function(resource, init) {
                 if (typeof resource === 'string' && resource.startsWith('/api/')) {
-                    resource = window.__HERNEST_API_BASE__ + resource;
+                    resource = window.__EARNEST_API_BASE__ + resource;
                 } else if (resource instanceof Request && resource.url.startsWith('/api/')) {
-                    resource = new Request(window.__HERNEST_API_BASE__ + resource.url, resource);
+                    resource = new Request(window.__EARNEST_API_BASE__ + resource.url, resource);
                 }
                 return origFetch(resource, init);
             };
@@ -56,7 +56,7 @@
                         </svg>
                     </div>
                     <div class="brand-text">
-                        <span class="brand-title">Hernest</span>
+                        <span class="brand-title">Earnest</span>
                         <span class="brand-badge">Agent Operations Center</span>
                     </div>
                 </div>

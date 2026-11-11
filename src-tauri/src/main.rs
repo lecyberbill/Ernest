@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-  hernest_desktop_lib::run();
+  earnest_desktop_lib::run();
 }

@@ -1,5 +1,5 @@
 import pytest
-from hernest.tools.sandbox import execute_in_sandbox, SandboxTimeoutError, SandboxExecutionError
+from earnest.tools.sandbox import execute_in_sandbox, SandboxTimeoutError, SandboxExecutionError
 
 def test_sandbox_python():
     res = execute_in_sandbox(

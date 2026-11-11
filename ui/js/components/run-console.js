@@ -110,8 +110,8 @@ export class RunConsole extends HTMLElement {
         `;
 
         const terminal = this.querySelector('#terminal');
-        if (window.__hernest_terminal_html) {
-            terminal.innerHTML = window.__hernest_terminal_html;
+        if (window.__earnest_terminal_html) {
+            terminal.innerHTML = window.__earnest_terminal_html;
         } else {
             this.renderStartupHealthCheck();
         }
@@ -367,7 +367,7 @@ export class RunConsole extends HTMLElement {
             }
 
             // Notifier le rafraîchissement des télémétries et des runs
-            window.dispatchEvent(new CustomEvent('hernest:run_completed'));
+            window.dispatchEvent(new CustomEvent('earnest:run_completed'));
         } catch (e) {
             this.appendTrace('error', `Erreur de communication : ${e.message}`);
             if (pixelStage) pixelStage.setAgentState('error');
@@ -379,7 +379,7 @@ export class RunConsole extends HTMLElement {
             const banner = this.querySelector('#approval-banner');
             if (banner) banner.style.display = 'none';
             // Conserver le contenu terminal en mémoire session
-            window.__hernest_terminal_html = terminal.innerHTML;
+            window.__earnest_terminal_html = terminal.innerHTML;
         }
     }
 
@@ -556,7 +556,7 @@ export class RunConsole extends HTMLElement {
 
         terminal.appendChild(item);
         terminal.scrollTop = terminal.scrollHeight;
-        window.__hernest_terminal_html = terminal.innerHTML;
+        window.__earnest_terminal_html = terminal.innerHTML;
     }
 }
 customElements.define('run-console', RunConsole);

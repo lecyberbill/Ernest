@@ -1,12 +1,12 @@
 [package]
-name = "hernest-desktop"
+name = "earnest-desktop"
 version = "0.1.0"
-description = "Hernest Agent Cockpit Desktop"
-authors = ["DeepMind Pair • Hernest Platform"]
+description = "Earnest Agent Cockpit Desktop"
+authors = ["DeepMind Pair • Earnest Platform"]
 edition = "2021"
 
 [lib]
-name = "hernest_desktop_lib"
+name = "earnest_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -18,4 +18,4 @@ serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.11.3" }
 tauri-plugin-log = "2"
-hernest-core = { path = "../hernest-core" }
+earnest-ide-core = { path = "../earnest-ide/core" }

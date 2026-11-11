@@ -1,8 +1,8 @@
 import tempfile
 import json
 import pytest
-from hernest.db.connection import init_db
-from hernest.tools.registry import ToolRegistryService
+from earnest.db.connection import init_db
+from earnest.tools.registry import ToolRegistryService
 
 @pytest.fixture
 def registry_service():

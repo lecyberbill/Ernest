@@ -1,9 +1,9 @@
 import tempfile
 import pytest
 from unittest.mock import MagicMock
-from hernest.db.connection import init_db
-from hernest.engine.react import ReActEngine, ReActExecutionError
-from hernest.llm.client import UnifiedLLMClient, LLMProviderError
+from earnest.db.connection import init_db
+from earnest.engine.react import ReActEngine, ReActExecutionError
+from earnest.llm.client import UnifiedLLMClient, LLMProviderError
 
 def test_explicit_failure_on_llm_error():
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:

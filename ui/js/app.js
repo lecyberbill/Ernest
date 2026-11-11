@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     updateTelemetry();
-    window.addEventListener('hernest:run_completed', updateTelemetry);
+    window.addEventListener('earnest:run_completed', updateTelemetry);
 
     // Bouton de rafraîchissement manuel de la sonde dans le HUD
     const btnRefreshHud = document.getElementById('btn-refresh-hud');

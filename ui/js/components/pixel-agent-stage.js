@@ -1,5 +1,5 @@
 /**
- * Cyber-Atelier 16-Bit Multi-Robots Modulaire pour Hernest
+ * Cyber-Atelier 16-Bit Multi-Robots Modulaire pour Earnest
  * Génère dynamiquement une mini-fenêtre / vignette animée par modèle enregistré.
  * Chaque tuile de modèle dispose de :
  * - Son avatar robot pixel-art personnalisé et animé
@@ -48,7 +48,7 @@ export class PixelAgentStage extends HTMLElement {
         this.startAnimationLoop();
 
         // Rafraîchir les tuiles quand les paramètres changent
-        window.addEventListener('hernest:run_completed', () => this.loadProviders());
+        window.addEventListener('earnest:run_completed', () => this.loadProviders());
     }
 
     async loadProviders() {

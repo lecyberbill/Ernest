@@ -77,7 +77,7 @@ export class SettingsView extends HTMLElement {
 
                     <div style="display: grid; grid-template-columns: 1fr 1.5fr auto; gap: 0.75rem; margin-bottom: 1.25rem;">
                         <input type="text" id="res-key" placeholder="Nom de la ressource (ex: repo_git, docs_path, dataset_dir)..." />
-                        <input type="text" id="res-value" placeholder="Chemin absolu ou URI (ex: D:\\Projet\\Hernest, C:\\tools)..." />
+                        <input type="text" id="res-value" placeholder="Chemin absolu ou URI (ex: D:\\Projet\\Earnest, C:\\tools)..." />
                         <button class="btn-primary" id="btn-add-resource">
                             <span>+</span> Associer
                         </button>
@@ -136,7 +136,7 @@ export class SettingsView extends HTMLElement {
             btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> Sondage...`;
             try {
                 await this.loadModelProviders();
-                window.dispatchEvent(new CustomEvent('hernest:run_completed'));
+                window.dispatchEvent(new CustomEvent('earnest:run_completed'));
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> Actualiser l'état`;
@@ -286,7 +286,7 @@ export class SettingsView extends HTMLElement {
                 this.querySelector('#new-mod-key').value = '';
                 this.querySelector('#add-model-panel').style.display = 'none';
                 await this.loadModelProviders();
-                window.dispatchEvent(new CustomEvent('hernest:run_completed'));
+                window.dispatchEvent(new CustomEvent('earnest:run_completed'));
             } else {
                 alert(`Erreur: ${data.error}`);
             }
@@ -305,7 +305,7 @@ export class SettingsView extends HTMLElement {
             const data = await res.json();
             if (data.status === 'ok' || data.status === 'updated') {
                 await this.loadModelProviders();
-                window.dispatchEvent(new CustomEvent('hernest:run_completed'));
+                window.dispatchEvent(new CustomEvent('earnest:run_completed'));
             } else {
                 alert(`Erreur: ${data.error}`);
             }
@@ -325,7 +325,7 @@ export class SettingsView extends HTMLElement {
             const data = await res.json();
             if (data.status === 'ok' || data.status === 'deleted') {
                 await this.loadModelProviders();
-                window.dispatchEvent(new CustomEvent('hernest:run_completed'));
+                window.dispatchEvent(new CustomEvent('earnest:run_completed'));
             } else {
                 alert(`Erreur: ${data.error}`);
             }

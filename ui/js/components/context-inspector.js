@@ -23,7 +23,7 @@ export class ContextInspector extends HTMLElement {
         `;
 
         this.loadHistory();
-        window.addEventListener('hernest:run_completed', () => this.loadHistory());
+        window.addEventListener('earnest:run_completed', () => this.loadHistory());
     }
 
     async loadHistory() {

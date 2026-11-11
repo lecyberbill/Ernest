@@ -34,7 +34,7 @@ export class ChatView extends HTMLElement {
                 <!-- Zone d'affichage des messages -->
                 <div id="chat-stream" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.85rem; padding-right: 0.5rem;">
                     <div class="chat-bubble assistant">
-                        Bonjour ! Je suis Hernest. Tu peux me poser des questions, me demander de réfléchir à un sujet ou discuter de ton projet librement ici.
+                        Bonjour ! Je suis Earnest. Tu peux me poser des questions, me demander de réfléchir à un sujet ou discuter de ton projet librement ici.
                     </div>
                 </div>
 
@@ -203,7 +203,7 @@ export class ChatView extends HTMLElement {
         this.messages.push({ role: 'user', content: text });
 
         // Placeholder temporaire assistant
-        const thinkingBubble = this.appendPlaceholder('Hernest réfléchit...');
+        const thinkingBubble = this.appendPlaceholder('Earnest réfléchit...');
 
         try {
             const res = await fetch('/api/chat', {
