@@ -124,7 +124,7 @@ Prove that all 10 architectural invariants are strictly respected:
 python tests/validate_invariants.py
 ```
 ```text
-=== Validation de 10 Invariants ===
+=== Validating 10 Architectural Invariants ===
 [INV-01-SCHEMA-SQLITE] ... OK [PASS]
 [INV-02-NO-DAEMON] ... OK [PASS]
 [INV-03-CORE-TOOLS-SCHEMA] ... OK [PASS]
@@ -136,7 +136,7 @@ python tests/validate_invariants.py
 [INV-09-ZERO-BUILD-VANILLA-UI] ... OK [PASS]
 [INV-10-OS-SCHEDULER-DELEGATION] ... OK [PASS]
 
-TOUS LES 10 INVARIANTS SONT RESPECTES A 100% !
+ALL 10 INVARIANTS ARE 100% RESPECTED & COMPLIANT!
 ```
 
 ### 3. Run Unit Tests
