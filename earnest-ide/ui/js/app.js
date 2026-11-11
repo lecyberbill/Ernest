@@ -1,6 +1,70 @@
 import { KbView } from './components/kb-view.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+    // ====================================================
+    // 0. SPLITTERS / REDIMENSIONNEMENT DES PANNEAUX
+    // ====================================================
+    const resizerLeft = document.getElementById('resizer-left');
+    const resizerRight = document.getElementById('resizer-right');
+    const mainGrid = document.querySelector('.ide-main-grid');
+
+    if (resizerLeft && mainGrid) {
+        let isDraggingLeft = false;
+        resizerLeft.addEventListener('mousedown', (e) => {
+            isDraggingLeft = true;
+            resizerLeft.classList.add('dragging');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDraggingLeft) return;
+            // Décalage de la barre d'activité (environ 50px)
+            const newWidth = Math.max(160, Math.min(600, e.clientX - 50));
+            mainGrid.style.setProperty('--sidebar-width', `${newWidth}px`);
+            if (editorInstance) editorInstance.layout();
+            if (diffEditorInstance) diffEditorInstance.layout();
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isDraggingLeft) {
+                isDraggingLeft = false;
+                resizerLeft.classList.remove('dragging');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                if (editorInstance) editorInstance.layout();
+            }
+        });
+    }
+
+    if (resizerRight && mainGrid) {
+        let isDraggingRight = false;
+        resizerRight.addEventListener('mousedown', (e) => {
+            isDraggingRight = true;
+            resizerRight.classList.add('dragging');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDraggingRight) return;
+            const newWidth = Math.max(260, Math.min(750, window.innerWidth - e.clientX));
+            mainGrid.style.setProperty('--agent-width', `${newWidth}px`);
+            if (editorInstance) editorInstance.layout();
+            if (diffEditorInstance) diffEditorInstance.layout();
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isDraggingRight) {
+                isDraggingRight = false;
+                resizerRight.classList.remove('dragging');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                if (editorInstance) editorInstance.layout();
+            }
+        });
+    }
+
     // État global de Earnest IDE
     const state = {
         currentProjectId: 'earnest',
@@ -527,15 +591,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function openFile(filePath) {
-        let existing = state.openTabs.find(t => t.path === filePath);
+        // Normaliser les antislashs pour Windows
+        const normalizedPath = filePath.replace(/\\/g, '/');
+        let existing = state.openTabs.find(t => t.path === normalizedPath || t.path.replace(/\\/g, '/') === normalizedPath);
         if (!existing) {
             try {
-                const res = await fetch(`/api/ide/file?path=${encodeURIComponent(filePath)}`);
+                const res = await fetch(`/api/ide/file?path=${encodeURIComponent(normalizedPath)}`);
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
 
-                const fileName = filePath.split('\\').pop().split('/').pop();
-                const lang = getMonacoLanguage(filePath);
+                const fileName = normalizedPath.split('/').pop();
+                const lang = getMonacoLanguage(normalizedPath);
                 
                 let monacoModel = null;
                 if (window.monaco) {
@@ -543,7 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 existing = {
-                    path: filePath,
+                    path: normalizedPath,
                     name: fileName,
                     content: data.content || '',
                     originalContent: data.content || '',
@@ -557,11 +623,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
         }
-        switchTab(filePath);
+        switchTab(existing.path);
         saveSessionState();
     }
 
     function switchTab(filePath) {
+        // Si la vue KB plein écran était active, la masquer
+        if (centralKbView && centralKbView.style.display === 'block') {
+            centralKbView.style.display = 'none';
+            monacoEditorContainer.style.display = 'block';
+            if (btnOpenKbTab) btnOpenKbTab.style.background = 'rgba(244, 63, 94, 0.1)';
+        }
+
         state.activeTabPath = filePath;
         const tab = getActiveTab();
         if (tab && editorInstance && window.monaco) {
@@ -703,7 +776,39 @@ document.addEventListener('DOMContentLoaded', () => {
     actBtnSearch.addEventListener('click', () => switchSidebarView('search'));
     actBtnGit.addEventListener('click', () => switchSidebarView('git'));
     actBtnDiagnostics.addEventListener('click', () => switchSidebarView('diagnostics'));
-    if (actBtnKb) actBtnKb.addEventListener('click', () => switchSidebarView('kb'));
+    const btnOpenKbTab = document.getElementById('btn-open-kb-tab');
+    const centralKbView = document.getElementById('central-kb-view');
+    let centralKbInstance = null;
+
+    if (btnOpenKbTab) {
+        btnOpenKbTab.addEventListener('click', () => {
+            const isKbActive = centralKbView && centralKbView.style.display === 'block';
+            if (isKbActive) {
+                // Fermer la KB et restaurer Monaco
+                centralKbView.style.display = 'none';
+                monacoEditorContainer.style.display = 'block';
+                btnOpenKbTab.style.background = 'rgba(244, 63, 94, 0.1)';
+                if (editorInstance) editorInstance.layout();
+            } else {
+                // Afficher la KB en plein panneau central
+                monacoEditorContainer.style.display = 'none';
+                if (monacoDiffContainer) monacoDiffContainer.style.display = 'none';
+                centralKbView.style.display = 'block';
+                btnOpenKbTab.style.background = 'rgba(244, 63, 94, 0.35)';
+                if (!centralKbInstance) {
+                    centralKbInstance = new KbView('central-kb-view');
+                } else {
+                    centralKbInstance.loadEntries();
+                }
+            }
+        });
+    }
+
+    if (actBtnKb) {
+        actBtnKb.addEventListener('click', () => {
+            if (btnOpenKbTab) btnOpenKbTab.click();
+        });
+    }
     if (actBtnSettings) actBtnSettings.addEventListener('click', () => switchSidebarView('settings'));
     if (btnOpenSettings) btnOpenSettings.addEventListener('click', () => switchSidebarView('settings'));
 
@@ -1131,16 +1236,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.style.flexDirection = 'column';
                 item.style.alignItems = 'flex-start';
                 item.innerHTML = `
-                    <div style="color:${color}; font-weight:700;">[${diag.severity.toUpperCase()}] ${diag.file}:${diag.line}</div>
-                    <div style="font-size:0.72rem; color:var(--text-secondary);">${escapeHtml(diag.message)}</div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                        <div style="color:${color}; font-weight:700;">[${diag.severity.toUpperCase()}] ${diag.file.split('/').pop()}:${diag.line}</div>
+                        <button class="btn-fix-with-ai" style="background:rgba(99,102,241,0.2); border:1px solid var(--accent-cyan); color:var(--accent-cyan); font-size:0.65rem; padding:1px 6px; border-radius:3px; cursor:pointer;" title="Demander au Pair Programmer de corriger ce problème">⚡ Corriger</button>
+                    </div>
+                    <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:2px;">${escapeHtml(diag.message)}</div>
+                    <div style="font-size:0.65rem; color:var(--text-muted); font-family:var(--font-mono); margin-top:1px;">${escapeHtml(diag.file)}</div>
                 `;
-                item.addEventListener('click', async () => {
+                
+                // Clic sur l'élément : Ouvre le fichier et saute à la ligne
+                item.addEventListener('click', async (e) => {
+                    if (e.target.classList.contains('btn-fix-with-ai')) return;
                     await openFile(diag.file);
                     if (editorInstance) {
                         editorInstance.revealLineInCenter(diag.line);
                         editorInstance.setPosition({ lineNumber: diag.line, column: diag.column });
                     }
                 });
+
+                // Clic sur "⚡ Corriger" : Ouvre le fichier ET envoie la consigne au Copilote
+                const btnFix = item.querySelector('.btn-fix-with-ai');
+                if (btnFix) {
+                    btnFix.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        await openFile(diag.file);
+                        if (editorInstance) {
+                            editorInstance.revealLineInCenter(diag.line);
+                            editorInstance.setPosition({ lineNumber: diag.line, column: diag.column });
+                        }
+                        if (agentPrompt) {
+                            agentPrompt.value = `Corrige ce problème détecté dans ${diag.file} à la ligne ${diag.line} :\n[${diag.severity}] ${diag.message}`;
+                            agentPrompt.focus();
+                        }
+                    });
+                }
                 diagnosticsListEl.appendChild(item.cloneNode(true));
                 bottomProblemsContent.appendChild(item);
             });

@@ -28,14 +28,21 @@ pub fn run_project_diagnostics(root_dir: &str) -> Result<Value, String> {
                             let text = msg["message"].as_str().unwrap_or("");
                             let spans = msg["spans"].as_array();
                             let (file_name, line_num, col_start, col_end) = if let Some(first_span) = spans.and_then(|s| s.first()) {
+                                let raw_file = first_span["file_name"].as_str().unwrap_or("");
+                                // Normaliser le chemin relatif à la racine du workspace si cargo a tourné dans un sous-dossier
+                                let norm_file = if !p.join("Cargo.toml").exists() && p.join("earnest-ide/core/Cargo.toml").exists() && !raw_file.starts_with("earnest-ide") {
+                                    format!("earnest-ide/core/{}", raw_file.replace('\\', "/"))
+                                } else {
+                                    raw_file.replace('\\', "/")
+                                };
                                 (
-                                    first_span["file_name"].as_str().unwrap_or(""),
+                                    norm_file,
                                     first_span["line_start"].as_u64().unwrap_or(1),
                                     first_span["column_start"].as_u64().unwrap_or(1),
                                     first_span["column_end"].as_u64().unwrap_or(1)
                                 )
                             } else {
-                                ("", 1, 1, 1)
+                                (String::new(), 1, 1, 1)
                             };
 
                             diagnostics.push(serde_json::json!({

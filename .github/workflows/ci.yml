@@ -75,3 +75,4 @@ jobs:
         run: |
           cd earnest-bcpe
           cargo check --verbose
+
