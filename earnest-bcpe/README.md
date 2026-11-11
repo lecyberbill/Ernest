@@ -44,8 +44,8 @@ Renseignez `app_settings.mcp_servers_config` (JSON) avec l'exécutable `kb` :
 [
   {
     "name": "bcpe",
-    "command": "D:\\Projet\\Earnest\\earnest-bcpe\\target\\release\\kb.exe",
-    "args": ["serve", "--db", "D:\\Projet\\Earnest\\earnest-bcpe\\kb.db"]
+    "command": ".\\earnest-bcpe\\target\\release\\kb.exe",
+    "args": ["serve", "--db", ".\\earnest-bcpe\\kb.db"]
   }
 ]
 ```
@@ -61,8 +61,8 @@ from earnest.db.connection import init_db
 conn = init_db()
 servers = [{
     "name": "bcpe",
-    "command": r"D:\Projet\Earnest\earnest-bcpe\target\release\kb.exe",
-    "args": ["serve", "--db", r"D:\Projet\Earnest\earnest-bcpe\kb.db"],
+    "command": r".\earnest-bcpe\target\release\kb.exe",
+    "args": ["serve", "--db", r".\earnest-bcpe\kb.db"],
 }]
 conn.execute(
     "INSERT INTO app_settings (key, value) VALUES ('mcp_servers_config', ?) "
@@ -79,8 +79,8 @@ conn.close()
 {
   "mcpServers": {
     "bcpe": {
-      "command": "D:\\Projet\\Earnest\\earnest-bcpe\\target\\release\\kb.exe",
-      "args": ["serve", "--db", "D:\\Projet\\Earnest\\earnest-bcpe\\kb.db"]
+      "command": ".\\earnest-bcpe\\target\\release\\kb.exe",
+      "args": ["serve", "--db", ".\\earnest-bcpe\\kb.db"]
     }
   }
 }

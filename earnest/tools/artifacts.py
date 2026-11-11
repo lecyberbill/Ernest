@@ -19,7 +19,7 @@ def create_artifact(
 ) -> Dict[str, Any]:
     """
     Crée un artefact et le matérialise sur le disque.
-    Si file_path est fourni (ex: D:\\Projet\\Earnest\\output.html), le fichier y est matérialisé directement.
+    Si file_path est fourni (ex: .\\output.html), le fichier y est matérialisé directement.
     Sinon, il est stocké dans le magasin d'artefacts d'Earnest (~/.local/share/agent-manager/artifacts/{project_id}/).
     """
     art_id = f"art_{uuid.uuid4().hex[:10]}"

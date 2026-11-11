@@ -77,7 +77,7 @@ export class SettingsView extends HTMLElement {
 
                     <div style="display: grid; grid-template-columns: 1fr 1.5fr auto; gap: 0.75rem; margin-bottom: 1.25rem;">
                         <input type="text" id="res-key" placeholder="Nom de la ressource (ex: repo_git, docs_path, dataset_dir)..." />
-                        <input type="text" id="res-value" placeholder="Chemin absolu ou URI (ex: D:\\Projet\\Earnest, C:\\tools)..." />
+                        <input type="text" id="res-value" placeholder="Chemin absolu ou URI (ex: ., C:\\tools)..." />
                         <button class="btn-primary" id="btn-add-resource">
                             <span>+</span> Associer
                         </button>

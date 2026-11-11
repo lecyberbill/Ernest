@@ -116,7 +116,7 @@ ARTIFACT_CREATE_SCHEMA: Dict[str, Any] = {
             },
             "file_path": {
                 "type": "string",
-                "description": "Chemin de destination facultatif (ex: D:\\Projet\\Earnest\\recette.md). Si omis, il est placé dans le magasin d'artefacts local."
+                "description": "Chemin de destination facultatif (ex: .\\recette.md). Si omis, il est placé dans le magasin d'artefacts local."
             }
         },
         "required": ["title", "content"]

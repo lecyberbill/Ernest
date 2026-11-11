@@ -13,7 +13,7 @@
       "id": "INV-02-NO-DAEMON",
       "statement": "Le runner CLI s'exécute en mode run-to-completion et se termine proprement avec exit code 0 sans laisser de thread d'écoute, serveur de fond ou boucle infinie.",
       "component": "cli/runner",
-      "executable_probe": "python -m earnest.cli run --prompt \"test prompt\" --project \"d:\\Projet\\Earnest\" --test-dry-run",
+      "executable_probe": "python -m earnest.cli run --prompt \"test prompt\" --project \".\" --test-dry-run",
       "expected_output": "EXIT_0"
     },
     {

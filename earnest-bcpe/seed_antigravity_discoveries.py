@@ -2,7 +2,7 @@ import subprocess
 import json
 
 def kb_call(tool, args):
-    proc = subprocess.Popen([r'D:\Projet\Earnest\earnest-bcpe\target\release\kb.exe', 'serve', '--db', r'D:\Projet\Earnest\earnest-bcpe\kb.db'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    proc = subprocess.Popen([r'.\earnest-bcpe\target\release\kb.exe', 'serve', '--db', r'.\earnest-bcpe\kb.db'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
     req = {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {'name': tool, 'arguments': args}}
     proc.stdin.write(json.dumps(req) + '\n')
     proc.stdin.flush()
