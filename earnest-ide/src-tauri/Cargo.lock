@@ -923,6 +923,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
+name = "earnest-ide-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "ignore",
+ "regex",
+ "reqwest 0.12.28",
+ "rusqlite",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "similar",
+ "tiny_http",
+ "urlencoding",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
+name = "earnest-ide-desktop"
+version = "0.1.0"
+dependencies = [
+ "earnest-ide-core",
+ "log",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-log",
+]
+
+[[package]]
 name = "embed-resource"
 version = "3.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1555,39 +1589,6 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
-
-[[package]]
-name = "hernest-ide-core"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "clap",
- "ignore",
- "regex",
- "reqwest 0.12.28",
- "rusqlite",
- "rust-embed",
- "serde",
- "serde_json",
- "similar",
- "tiny_http",
- "urlencoding",
- "uuid",
- "walkdir",
-]
-
-[[package]]
-name = "hernest-ide-desktop"
-version = "0.1.0"
-dependencies = [
- "hernest-ide-core",
- "log",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-log",
-]
 
 [[package]]
 name = "hex"
