@@ -9,6 +9,9 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/lecyberbill/Ernest/actions/workflows/ci.yml">
+    <img src="https://github.com/lecyberbill/Ernest/actions/workflows/ci.yml/badge.svg" alt="CI Status">
+  </a>
   <img src="https://img.shields.io/badge/Rust-2024%20%2F%202021-orange?logo=rust" alt="Rust">
   <img src="https://img.shields.io/badge/Python-3.11+-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Protocol-MCP%20Native-purple" alt="MCP Native">
