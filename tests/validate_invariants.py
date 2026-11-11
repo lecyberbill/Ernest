@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 
@@ -9,7 +10,11 @@ def main():
         except Exception:
             pass
 
-    with open("invariants.json", "r", encoding="utf-8") as f:
+    invariants_path = ".ide/invariants.json"
+    if not os.path.exists(invariants_path):
+        invariants_path = "invariants.json"
+
+    with open(invariants_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     invariants = data.get("invariants", [])

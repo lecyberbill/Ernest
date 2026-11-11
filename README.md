@@ -177,8 +177,7 @@ Ernest/
 │   └── ui/                     # Vanilla JS + Monaco Editor UI cockpit
 ├── earnest-bcpe/               # Experience Knowledge Base (RAG & Incident Memory)
 ├── tests/                      # Formal test suites & Invariant verification harness
-├── .ide/                       # Project-level governance policy & invariant definitions
-└── invariants.json             # Core invariant specifications
+└── .ide/                       # Project-level governance policy & invariant definitions
 ```
 
 ---
