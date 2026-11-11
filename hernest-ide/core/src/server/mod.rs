@@ -387,6 +387,86 @@ fn handle_request(mut req: tiny_http::Request) {
             req.respond(resp).ok();
             return;
         }
+
+        // --- GOUVERNANCE PAR INVARIANTS : ENDPOINT STATUS ---
+        if path == "/api/ide/governance/status" {
+            let root_str = query.get("root").map(|s| s.as_str()).unwrap_or(".");
+            let root_path = PathBuf::from(root_str);
+            let pm = crate::governance::PolicyManager::new(&root_path);
+            let policy = pm.load_or_init(None).unwrap_or_default();
+
+            let inv_path = root_path.join(&policy.invariants_file);
+            let lock_path = root_path.join(&policy.lock_file);
+
+            let lock_exists = lock_path.exists();
+            let inv_exists = inv_path.exists();
+
+            let integrity_status = if inv_exists && lock_exists {
+                match crate::governance::invariants::verify_invariants_lock(&root_path, &policy.invariants_file, &policy.lock_file) {
+                    Ok(hash) => serde_json::json!({"status": "verified", "sha256": hash}),
+                    Err(e) => serde_json::json!({"status": "corrupted", "error": e}),
+                }
+            } else {
+                serde_json::json!({"status": "unsealed", "message": "Invariants non scellés ou fichiers absents"})
+            };
+
+            let contracts_summary = if inv_exists {
+                if let Ok(c) = fs::read_to_string(&inv_path) {
+                    let f: Result<crate::governance::InvariantsFile, _> = serde_json::from_str(&c);
+                    f.map(|file| serde_json::json!({
+                        "count": file.contracts.len(),
+                        "contracts": file.contracts.iter().map(|item| serde_json::json!({
+                            "id": item.id,
+                            "target_file": item.target_file,
+                            "criticality": item.criticality,
+                            "probes_count": item.probes.len()
+                        })).collect::<Vec<_>>()
+                    })).unwrap_or_else(|_| serde_json::json!({"count": 0, "contracts": []}))
+                } else {
+                    serde_json::json!({"count": 0, "contracts": []})
+                }
+            } else {
+                serde_json::json!({"count": 0, "contracts": []})
+            };
+
+            let logger = crate::governance::AuditLogger::new(&root_path, &policy.audit_log);
+            let audit_entries = logger.read_entries().unwrap_or_default();
+
+            let out = serde_json::json!({
+                "mode": policy.mode,
+                "version": policy.version,
+                "invariants_file": policy.invariants_file,
+                "lock_file": policy.lock_file,
+                "audit_log": policy.audit_log,
+                "integrity": integrity_status,
+                "contracts": contracts_summary,
+                "audit_entries_count": audit_entries.len(),
+                "shadow_env": policy.shadow_env,
+                "guardrails": policy.guardrails
+            });
+
+            let resp = Response::from_string(out.to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        // --- GOUVERNANCE PAR INVARIANTS : AUDIT LOG ---
+        if path == "/api/ide/governance/audit" {
+            let root_str = query.get("root").map(|s| s.as_str()).unwrap_or(".");
+            let root_path = PathBuf::from(root_str);
+            let pm = crate::governance::PolicyManager::new(&root_path);
+            let policy = pm.load_or_init(None).unwrap_or_default();
+            let logger = crate::governance::AuditLogger::new(&root_path, &policy.audit_log);
+            let entries = logger.read_entries().unwrap_or_default();
+
+            let resp = Response::from_string(serde_json::json!(entries).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
     }
 
     // 2. ENDPOINTS POST
@@ -808,7 +888,7 @@ Garde l'indentation appropriée.";
                 match res {
                     Ok(r) => {
                         let comp_json = serde_json::json!({
-                            "status": "completed",
+                            "status": r.status,
                             "run_id": r.run_id,
                             "answer": r.answer,
                             "tokens": r.total_tokens,
@@ -826,6 +906,195 @@ Garde l'indentation appropriée.";
             req.respond(resp).ok();
             return;
         }
+
+        // --- GOUVERNANCE PAR INVARIANTS : INITIALISATION DU MODE ---
+        if path == "/api/ide/governance/init_mode" {
+            let root_str = payload["root"].as_str().unwrap_or(".");
+            let mode_str = payload["mode"].as_str().unwrap_or("normal");
+            let root_path = PathBuf::from(root_str);
+
+            let requested_mode = match mode_str {
+                "architecture" | "archi" => crate::governance::GovernanceMode::Architecture,
+                "constrained" => crate::governance::GovernanceMode::Constrained,
+                _ => crate::governance::GovernanceMode::Normal,
+            };
+
+            let pm = crate::governance::PolicyManager::new(&root_path);
+            match pm.load_or_init(Some(requested_mode)) {
+                Ok(policy) => {
+                    let resp = Response::from_string(serde_json::json!({
+                        "status": "success",
+                        "mode": policy.mode,
+                        "policy": policy
+                    }).to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"status": "error", "error": e}).to_string())
+                        .with_status_code(500).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        // --- GOUVERNANCE PAR INVARIANTS : APPROBATION REVUE ARCHITECTURE (Mode 3 -> Mode 2) ---
+        if path == "/api/ide/governance/review_approve" {
+            let root_str = payload["root"].as_str().unwrap_or(".");
+            let root_path = PathBuf::from(root_str);
+            let pm = crate::governance::PolicyManager::new(&root_path);
+            let mut policy = pm.load_or_init(None).unwrap_or_default();
+
+            let inv_path = root_path.join(&policy.invariants_file);
+            let lock_path = root_path.join(&policy.lock_file);
+
+            if !inv_path.exists() {
+                let resp = Response::from_string(serde_json::json!({
+                    "status": "error",
+                    "error": format!("Fichier {} introuvable pour scellement", policy.invariants_file)
+                }).to_string()).with_status_code(400).with_header(json_header).with_header(cors_header);
+                req.respond(resp).ok();
+                return;
+            }
+
+            // Lire les invariants et sceller cryptographiquement avec chmod 444 (set_readonly(true))
+            let inv_content = fs::read_to_string(&inv_path).unwrap_or_default();
+            let inv_file: crate::governance::InvariantsFile = match serde_json::from_str(&inv_content) {
+                Ok(f) => f,
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({
+                        "status": "error",
+                        "error": format!("Erreur parse JSON invariants: {}", e)
+                    }).to_string()).with_status_code(400).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                    return;
+                }
+            };
+
+            // Scellement
+            match crate::governance::invariants::seal_invariants(&root_path, &policy.invariants_file, &policy.lock_file, &inv_file) {
+                Ok(sealed_hash) => {
+                    // Transition d'état : Passage en Mode 2 Contraint
+                    policy.mode = crate::governance::GovernanceMode::Constrained;
+                    pm.save(&policy).ok();
+
+                    // Journal d'audit
+                    let logger = crate::governance::AuditLogger::new(&root_path, &policy.audit_log);
+                    let entry = crate::governance::AuditEntry {
+                        event_id: format!("seal_{}", &uuid::Uuid::new_v4().to_string().replace('-', "")[..8]),
+                        timestamp: chrono::Utc::now().to_rfc3339(),
+                        initiator: "developer_ui".to_string(),
+                        target_invariant_id: "ALL_CONTRACTS".to_string(),
+                        reason: "Approbation de l'architecture initiale et scellement SHA-256 (Mode 3 -> Mode 2)".to_string(),
+                        previous_hash: "NONE".to_string(),
+                        new_hash: sealed_hash.clone(),
+                        diff: "Initial Seal".to_string(),
+                        approved_by: "developer".to_string(),
+                    };
+                    logger.append(&entry).ok();
+
+                    let resp = Response::from_string(serde_json::json!({
+                        "status": "SEALED",
+                        "new_mode": "constrained",
+                        "sealed_hash": sealed_hash,
+                        "contracts_count": inv_file.contracts.len()
+                    }).to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"status": "error", "error": e}).to_string())
+                        .with_status_code(500).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        // --- GOUVERNANCE PAR INVARIANTS : APPROBATION MUTATION CONTRAT (Mode 2) ---
+        if path == "/api/ide/governance/mutation_approve" {
+            let root_str = payload["root"].as_str().unwrap_or(".");
+            let target_contract_id = payload["target_contract_id"].as_str().unwrap_or("");
+            let reason = payload["reason"].as_str().unwrap_or("Mutation approuvée par le développeur");
+            let diff_str = payload["diff"].as_str().unwrap_or("");
+            let root_path = PathBuf::from(root_str);
+
+            let pm = crate::governance::PolicyManager::new(&root_path);
+            let policy = pm.load_or_init(None).unwrap_or_default();
+
+            // Récupérer l'ancien hash
+            let prev_hash = crate::governance::invariants::verify_invariants_lock(&root_path, &policy.invariants_file, &policy.lock_file)
+                .unwrap_or_else(|_| "UNKNOWN".to_string());
+
+            // Déverrouillage explicite (set_readonly(false)), modification et re-scellement immédiat (Contrainte 3)
+            let mutate_result = crate::governance::invariants::mutate_invariants(
+                &root_path,
+                &policy.invariants_file,
+                &policy.lock_file,
+                |inv_file| {
+                    // Si des updated_probes ou contract sont fournis dans le payload
+                    if let Some(probes_val) = payload.get("updated_probes").and_then(|v| v.as_array()) {
+                        if let Some(target_contract) = inv_file.contracts.iter_mut().find(|c| c.id == target_contract_id) {
+                            let mut new_probes: Vec<crate::governance::ProbeSpec> = Vec::new();
+                            for pv in probes_val {
+                                if let Ok(probe) = serde_json::from_value(pv.clone()) {
+                                    new_probes.push(probe);
+                                }
+                            }
+                            if !new_probes.is_empty() {
+                                target_contract.probes = new_probes;
+                            }
+                        }
+                    }
+                    Ok(())
+                }
+            );
+
+            match mutate_result {
+                Ok(new_hash) => {
+                    // Journal d'audit append-only
+                    let logger = crate::governance::AuditLogger::new(&root_path, &policy.audit_log);
+                    let entry = crate::governance::AuditEntry {
+                        event_id: format!("mut_{}", &uuid::Uuid::new_v4().to_string().replace('-', "")[..8]),
+                        timestamp: chrono::Utc::now().to_rfc3339(),
+                        initiator: payload["initiator"].as_str().unwrap_or("developer").to_string(),
+                        target_invariant_id: target_contract_id.to_string(),
+                        reason: reason.to_string(),
+                        previous_hash: prev_hash,
+                        new_hash: new_hash.clone(),
+                        diff: diff_str.to_string(),
+                        approved_by: "developer".to_string(),
+                    };
+                    logger.append(&entry).ok();
+
+                    let resp = Response::from_string(serde_json::json!({
+                        "status": "MUTATION_SEALED",
+                        "new_hash": new_hash,
+                        "target_contract_id": target_contract_id
+                    }).to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({"status": "error", "error": e}).to_string())
+                        .with_status_code(500).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
+        // --- GOUVERNANCE PAR INVARIANTS : AUTORISATION ESSAI #4 (Point de Contrôle Réflexif) ---
+        if path == "/api/ide/governance/retry_authorize" {
+            let failed_probe_id = payload["failed_probe_id"].as_str().unwrap_or("");
+            // Débloque pour une tentative supplémentaire
+            let resp = Response::from_string(serde_json::json!({
+                "status": "RETRY_AUTHORIZED",
+                "probe_id": failed_probe_id,
+                "message": format!("Tentative supplémentaire autorisée pour la sonde '{}'.", failed_probe_id)
+            }).to_string()).with_header(json_header).with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
     }
 
     // 3. FICHIERS STATIQUES (UI EMBARQUÉE OU SERVIE)

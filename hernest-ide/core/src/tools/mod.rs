@@ -202,3 +202,111 @@ pub fn get_ide_tools_schemas() -> Vec<Value> {
     ]
 }
 
+pub fn get_governance_tools_schemas() -> Vec<Value> {
+    vec![
+        serde_json::json!({
+            "type": "function",
+            "function": {
+                "name": "write_code",
+                "description": "Applique un patch de code sur le projet. Le patch est immédiatement testé contre les sondes d'invariants dans un environnement isolé (shadow sandbox git worktree) avant d'être validé.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "target_contract_id": { "type": "string", "description": "Identifiant du contrat d'invariant satisfait (ex: 'contract_allocator', 'C1')" },
+                        "target_file": { "type": "string", "description": "Fichier source cible" },
+                        "patch": { "type": "string", "description": "Diff unifié ou contenu complet à écrire" }
+                    },
+                    "required": ["target_contract_id", "target_file", "patch"]
+                }
+            }
+        }),
+        serde_json::json!({
+            "type": "function",
+            "function": {
+                "name": "submit_invariants",
+                "description": "Définit ou met à jour la proposition formelle d'invariants (spécification, contrats, sondes de test) dans .ide/invariants.json en Mode 3 Architecture.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "invariants": {
+                            "type": "object",
+                            "description": "Structure complète des invariants (schema_version, project_id, contracts avec probes, target_file, symbols, criticality)"
+                        }
+                    },
+                    "required": ["invariants"]
+                }
+            }
+        }),
+        serde_json::json!({
+            "type": "function",
+            "function": {
+                "name": "request_architecture_review",
+                "description": "Demande une validation humaine formelle de l'architecture et des invariants spécifiés (Mode 3). Interrompt la boucle d'exécution en attendant l'accord de l'utilisateur pour sceller le contrat cryptographique (SHA-256) et basculer en Mode 2 Contraint.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "summary": { "type": "string", "description": "Résumé exécutif clair de l'architecture proposée et des contrats" },
+                        "invariants_hash": { "type": "string", "description": "Hash SHA-256 calculé du fichier invariants.json proposé" }
+                    },
+                    "required": ["summary"]
+                }
+            }
+        }),
+        serde_json::json!({
+            "type": "function",
+            "function": {
+                "name": "query_invariants",
+                "description": "Consulte les invariants et signatures publiques d'un module spécifique du projet sans saturer la fenêtre de contexte.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "target_file_or_symbol": { "type": "string", "description": "Chemin de fichier ou symbole à inspecter" }
+                    },
+                    "required": ["target_file_or_symbol"]
+                }
+            }
+        }),
+        serde_json::json!({
+            "type": "function",
+            "function": {
+                "name": "request_contract_mutation",
+                "description": "Sollicite une modification du contrat d'invariants scellé auprès de l'IDE et du développeur suite à une découverte technique ou un refactoring indispensable.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "target_contract_id": { "type": "string", "description": "Identifiant du contrat à muter" },
+                        "initiator": { "type": "string", "enum": ["developer_request", "agent_bottleneck"], "description": "Initiateur de la demande" },
+                        "reason": { "type": "string", "description": "Justification technique détaillée" },
+                        "diff": { "type": "string", "description": "Diff unifié à appliquer sur invariants.json" },
+                        "updated_probes": {
+                            "type": "array",
+                            "items": { "type": "object" },
+                            "description": "Nouvelles sondes ou sondes modifiées (optionnel)"
+                        }
+                    },
+                    "required": ["target_contract_id", "initiator", "reason", "diff"]
+                }
+            }
+        }),
+        serde_json::json!({
+            "type": "function",
+            "function": {
+                "name": "report_checkpoint_status",
+                "description": "Exécuté obligatoirement après 3 échecs consécutifs sur une sonde. Fournit l'autopsie d'erreur et la stratégie avant d'obtenir l'autorisation de continuer.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "failed_probe_id": { "type": "string", "description": "Identifiant de la sonde en échec" },
+                        "consecutive_failures": { "type": "integer", "description": "Nombre d'échecs consécutifs constatés" },
+                        "root_cause_analysis": { "type": "string", "description": "Explication technique détaillée de la cause racine des 3 échecs passés" },
+                        "next_attempt_strategy": { "type": "string", "description": "Ce qui sera fait différemment au 4e essai pour garantir la conformité" },
+                        "request_type": { "type": "string", "enum": ["authorize_retry_4", "need_human_help", "suggest_contract_mutation"], "description": "Type de requête transmise à l'humain" }
+                    },
+                    "required": ["failed_probe_id", "root_cause_analysis", "next_attempt_strategy", "request_type"]
+                }
+            }
+        })
+    ]
+}
+
+

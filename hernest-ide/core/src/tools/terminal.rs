@@ -16,6 +16,10 @@ pub fn is_forbidden(command: &str) -> bool {
 }
 
 pub fn execute_terminal(command: &str, timeout_secs: u64) -> Result<Value, String> {
+    execute_terminal_in_dir(command, timeout_secs, None)
+}
+
+pub fn execute_terminal_in_dir(command: &str, _timeout_secs: u64, cwd: Option<&std::path::Path>) -> Result<Value, String> {
     if is_forbidden(command) {
         return Err(format!("Commande bloquée par les garde-fous de sécurité : '{}'", command));
     }
@@ -33,6 +37,10 @@ pub fn execute_terminal(command: &str, timeout_secs: u64) -> Result<Value, Strin
         c.args(["-c", command]);
         c
     };
+
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
 
     let start = std::time::Instant::now();
     let output = cmd.output().map_err(|e| format!("Échec du lancement du sous-processus : {}", e))?;

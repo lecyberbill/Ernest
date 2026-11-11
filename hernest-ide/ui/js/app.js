@@ -1443,7 +1443,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/ide/run/stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: text, project: 'hernest_ide_workspace' })
+                body: JSON.stringify({ prompt: text, project: state.currentRoot || 'hernest_ide_workspace' })
             });
 
             if (!res.ok) {
@@ -1475,13 +1475,41 @@ document.addEventListener('DOMContentLoaded', () => {
                             thoughtDiv.style.fontStyle = 'italic';
                             thoughtDiv.textContent = `💭 ${payload.payload}`;
                             assistantBubble.appendChild(thoughtDiv);
-                        } else if (payload.step_type === 'action') {
+                        } else if (payload.step_type === 'tool_call' || payload.step_type === 'action') {
                             const actionDiv = document.createElement('div');
                             actionDiv.style.cssText = 'color:var(--accent-amber); font-weight:600; padding:2px 6px; background:rgba(245,158,11,0.1); border-radius:3px;';
-                            actionDiv.textContent = `⚙️ Outil : ${payload.tool_name} (${JSON.stringify(payload.payload)})`;
+                            actionDiv.textContent = `⚙️ Outil : ${payload.tool_name} (${payload.payload})`;
                             assistantBubble.appendChild(actionDiv);
-                        } else if (payload.status === 'completed') {
-                            // Réponse finale terminée
+                        } else if (payload.step_type === 'tool_output') {
+                            // Interception des interruptions d'approbation asynchrone (Contrainte 5)
+                            try {
+                                const outObj = JSON.parse(payload.payload);
+                                if (outObj.status === 'awaiting_approval') {
+                                    if (outObj.action === 'architecture_review') {
+                                        openGovernanceApproval({
+                                            type: 'architecture_review',
+                                            summary: outObj.summary,
+                                            invariants_hash: outObj.invariants_hash
+                                        });
+                                    } else if (outObj.action === 'contract_mutation') {
+                                        openGovernanceApproval({
+                                            type: 'contract_mutation',
+                                            target_contract_id: outObj.target_contract_id,
+                                            reason: outObj.reason,
+                                            diff: outObj.diff
+                                        });
+                                    } else if (outObj.action === 'checkpoint_status') {
+                                        openGovernanceApproval({
+                                            type: 'checkpoint_status',
+                                            failed_probe_id: outObj.failed_probe_id,
+                                            root_cause_analysis: outObj.root_cause_analysis,
+                                            next_attempt_strategy: outObj.next_attempt_strategy
+                                        });
+                                    }
+                                }
+                            } catch (_) {}
+                        } else if (payload.status === 'completed' || (payload.status && payload.status.startsWith('awaiting_approval'))) {
+                            // Réponse finale terminée ou interrompue pour approbation
                             const finalAnswer = document.createElement('div');
                             finalAnswer.style.color = 'var(--text-primary)';
                             finalAnswer.style.whiteSpace = 'pre-wrap';
@@ -1741,6 +1769,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadAllProjectFiles();
         refreshGitStatus();
         refreshDiagnostics();
+        refreshGovernanceStatus();
 
         // Mettre à jour l'invite du copilote
         chatStream.innerHTML = `
@@ -1788,6 +1817,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            // Récupérer le mode de gouvernance choisi
+            const selectedModeInput = document.querySelector('input[name="proj-gov-mode"]:checked');
+            const govMode = selectedModeInput ? selectedModeInput.value : 'normal';
+
             try {
                 const res = await fetch('/api/ide/projects', {
                     method: 'POST',
@@ -1799,6 +1832,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     })
                 });
                 const data = await res.json();
+
+                // Initialiser le mode de gouvernance choisi (.ide/policy.json)
+                await fetch('/api/ide/governance/init_mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        root,
+                        mode: govMode
+                    })
+                });
+
                 projNameInput.value = '';
                 projRootInput.value = '';
                 newProjectForm.style.display = 'none';
@@ -1811,6 +1855,176 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // ====================================================
+    // GOUVERNANCE PAR INVARIANTS : BADGE & MODAL APPROBATION
+    // ====================================================
+    const govBadge = document.getElementById('governance-badge');
+    const govIndicator = document.getElementById('gov-indicator');
+    const govModeText = document.getElementById('gov-mode-text');
+    const govApprovalModal = document.getElementById('governance-approval-modal');
+    const govModalTitle = document.getElementById('gov-modal-title');
+    const govModalBadge = document.getElementById('gov-modal-badge');
+    const govModalBody = document.getElementById('gov-modal-body');
+    const btnGovApprove = document.getElementById('btn-gov-approve');
+    const btnGovReject = document.getElementById('btn-gov-reject');
+
+    let currentPendingApproval = null;
+
+    async function refreshGovernanceStatus() {
+        if (!govBadge) return;
+        try {
+            const res = await fetch(`/api/ide/governance/status?root=${encodeURIComponent(state.currentRoot || '.')}`);
+            const data = await res.json();
+            const mode = data.mode || 'normal';
+
+            if (mode === 'normal') {
+                govIndicator.style.background = '#94a3b8';
+                govModeText.textContent = 'Mode 1: Normal';
+                govBadge.title = 'Mode normal : tous outils ouverts';
+            } else if (mode === 'architecture') {
+                govIndicator.style.background = '#38bdf8';
+                govModeText.textContent = 'Mode 3: Archi';
+                govBadge.title = 'Mode Architecture Spec-First : Zéro code, conception invariants';
+            } else if (mode === 'constrained') {
+                const isVerified = data.integrity && data.integrity.status === 'verified';
+                govIndicator.style.background = isVerified ? '#4ade80' : '#f87171';
+                govModeText.textContent = isVerified ? 'Mode 2: Contraint 🔒' : 'Mode 2: Corrompu ⚠️';
+                govBadge.title = isVerified
+                    ? `Mode Contraint : ${data.contracts.count} contrat(s) scellé(s) SHA-256`
+                    : 'Alerte : Sceau cryptographique non vérifié !';
+            }
+        } catch (e) {
+            console.error('Erreur refresh gouvernance:', e);
+        }
+    }
+
+    function openGovernanceApproval(approvalData) {
+        currentPendingApproval = approvalData;
+        govModalBody.innerHTML = '';
+
+        if (approvalData.type === 'architecture_review') {
+            govModalTitle.textContent = '🛡️ REVUE D\'ARCHITECTURE & INVARIANTS';
+            govModalBadge.textContent = 'Mode 3 → Mode 2';
+            govModalBadge.style.background = 'rgba(56, 189, 248, 0.2)';
+            govModalBadge.style.color = '#38bdf8';
+            btnGovApprove.textContent = 'Approuver & Sceller (SHA-256)';
+
+            govModalBody.innerHTML = `
+                <div style="background: rgba(15, 23, 42, 0.6); padding: 0.75rem; border-radius: 4px; border-left: 3px solid #38bdf8;">
+                    <div style="color: #38bdf8; font-weight: 700; margin-bottom: 0.25rem;">Résumé exécutif proposé :</div>
+                    <div>${escapeHtml(approvalData.summary || 'Spécification complète')}</div>
+                </div>
+                <div style="color: var(--text-muted); font-size: 0.7rem;">
+                    Hash calculé : <code>${escapeHtml(approvalData.invariants_hash || 'SHA-256')}</code><br>
+                    En approuvant, les fichiers <code>.ide/invariants.json</code> et <code>.ide/invariants.lock</code> seront scellés en lecture seule (chmod 444) et le projet basculera en <strong>Mode 2 Contraint</strong>.
+                </div>
+            `;
+        } else if (approvalData.type === 'contract_mutation') {
+            govModalTitle.textContent = '⚡ DEMANDE DE MUTATION DE CONTRAT';
+            govModalBadge.textContent = 'Mutation Assistée';
+            govModalBadge.style.background = 'rgba(251, 191, 36, 0.2)';
+            govModalBadge.style.color = '#fbbf24';
+            btnGovApprove.textContent = 'Valider Mutation & Recalculer Hash';
+
+            govModalBody.innerHTML = `
+                <div style="background: rgba(15, 23, 42, 0.6); padding: 0.75rem; border-radius: 4px; border-left: 3px solid #fbbf24;">
+                    <div style="color: #fbbf24; font-weight: 700; margin-bottom: 0.25rem;">Contrat visé : ${escapeHtml(approvalData.target_contract_id)}</div>
+                    <div><strong>Justification :</strong> ${escapeHtml(approvalData.reason)}</div>
+                </div>
+                <div>
+                    <label style="color: var(--text-muted); font-size: 0.7rem; font-weight: 700;">Diff proposé sur invariants.json :</label>
+                    <pre style="background: #0b0f19; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-subtle); color: #4ade80; overflow-x: auto; max-height: 200px;">${escapeHtml(approvalData.diff || 'Diff unifié')}</pre>
+                </div>
+            `;
+        } else if (approvalData.type === 'checkpoint_status') {
+            govModalTitle.textContent = '🛑 POINT DE CONTRÔLE RÉFLEXIF (AUTOPSIE)';
+            govModalBadge.textContent = '3 Échecs Consécutifs';
+            govModalBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+            govModalBadge.style.color = '#f87171';
+            btnGovApprove.textContent = 'Autoriser Essai #4';
+
+            govModalBody.innerHTML = `
+                <div style="background: rgba(15, 23, 42, 0.6); padding: 0.75rem; border-radius: 4px; border-left: 3px solid #f87171;">
+                    <div style="color: #f87171; font-weight: 700; margin-bottom: 0.25rem;">Sonde bloquante : ${escapeHtml(approvalData.failed_probe_id)}</div>
+                    <div style="margin-bottom: 0.4rem;"><strong>Autopsie de cause racine :</strong> ${escapeHtml(approvalData.root_cause_analysis)}</div>
+                    <div><strong>Stratégie pour la reprise :</strong> ${escapeHtml(approvalData.next_attempt_strategy)}</div>
+                </div>
+            `;
+        }
+
+        govApprovalModal.classList.add('open');
+    }
+
+    if (btnGovReject) {
+        btnGovReject.addEventListener('click', () => {
+            govApprovalModal.classList.remove('open');
+            currentPendingApproval = null;
+        });
+    }
+
+    if (btnGovApprove) {
+        btnGovApprove.addEventListener('click', async () => {
+            if (!currentPendingApproval) return;
+            const root = state.currentRoot || '.';
+
+            try {
+                if (currentPendingApproval.type === 'architecture_review') {
+                    const res = await fetch('/api/ide/governance/review_approve', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ root })
+                    });
+                    const d = await res.json();
+                    if (d.status === 'SEALED') {
+                        alert(`Architecture validée et scellée avec succès ! (Hash : ${d.sealed_hash.substring(0, 16)}...)\nLe projet est maintenant en Mode 2 Contraint.`);
+                    }
+                } else if (currentPendingApproval.type === 'contract_mutation') {
+                    const res = await fetch('/api/ide/governance/mutation_approve', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            root,
+                            target_contract_id: currentPendingApproval.target_contract_id,
+                            reason: currentPendingApproval.reason,
+                            diff: currentPendingApproval.diff
+                        })
+                    });
+                    const d = await res.json();
+                    if (d.status === 'MUTATION_SEALED') {
+                        alert(`Mutation scellée dans l'audit log ! Nouveau hash SHA-256 : ${d.new_hash.substring(0, 16)}...`);
+                    }
+                } else if (currentPendingApproval.type === 'checkpoint_status') {
+                    await fetch('/api/ide/governance/retry_authorize', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            failed_probe_id: currentPendingApproval.failed_probe_id
+                        })
+                    });
+                    alert(`Tentative #4 autorisée pour la sonde ${currentPendingApproval.failed_probe_id}. L'agent peut reprendre.`);
+                }
+            } catch (err) {
+                alert(`Erreur validation gouvernance : ${err.message}`);
+            } finally {
+                govApprovalModal.classList.remove('open');
+                currentPendingApproval = null;
+                refreshGovernanceStatus();
+            }
+        });
+    }
+
+    if (govBadge) {
+        govBadge.addEventListener('click', () => {
+            // Afficher le statut de gouvernance
+            fetch(`/api/ide/governance/status?root=${encodeURIComponent(state.currentRoot || '.')}`)
+                .then(r => r.json())
+                .then(d => {
+                    alert(`Statut Gouvernance Hernest :\nMode : ${d.mode}\nContrats : ${d.contracts.count}\nIntégrité : ${d.integrity.status} (${d.integrity.sha256 || 'N/A'})\nJournal d'audit : ${d.audit_entries_count} entrée(s)`);
+                });
+        });
+    }
+
 
     // ====================================================
     // 13. FILE WATCHER CLIENT-SIDE (DÉTECTION MODIFICATIONS EXTERNES)
@@ -1856,6 +2070,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadAllProjectFiles();
         refreshGitStatus();
         refreshDiagnostics();
+        refreshGovernanceStatus();
         const restored = await restoreSessionState();
         await loadTree();
         if (!restored) {

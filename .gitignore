@@ -8,8 +8,26 @@ target/
 __pycache__/
 *.pyc
 .env
+.env.*
 .venv/
 node_modules/
 dist/
 build/
+
+# Governance & Shadow Worktrees
+.ide/shadow_worktree/
+**/.ide/shadow_worktree/
+*.lock.tmp
+
+# Local testing and scratch environments
+projects_test/
+*.log
+**/*.log
+
+# OS & Editor artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
 

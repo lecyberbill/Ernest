@@ -1,4 +1,6 @@
 use std::time::Instant;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use rusqlite::{params, Connection};
 use serde_json::Value;
 
@@ -9,7 +11,12 @@ use crate::tools::fs::{read_file, write_file, edit_file};
 use crate::tools::search::{grep_search, list_files};
 use crate::tools::terminal::execute_terminal;
 use crate::tools::web::{search_web, fetch_web_page};
-use crate::tools::get_ide_tools_schemas;
+use crate::tools::{get_ide_tools_schemas, get_governance_tools_schemas};
+use crate::governance::{
+    GovernanceMode, PolicyManager, PolicyConfig,
+    InvariantsFile, verify_invariants_lock, seal_invariants,
+    ShadowRunner, AuditLogger, AuditEntry
+};
 
 pub struct ReActResult {
     pub run_id: String,
@@ -24,17 +31,37 @@ pub struct ReActEngine<'a> {
     pub conn: &'a Connection,
     pub router: &'a LLMRouter,
     pub project_id: String,
+    pub workspace_root: PathBuf,
     pub max_steps: usize,
 }
 
 impl<'a> ReActEngine<'a> {
     pub fn new(conn: &'a Connection, router: &'a LLMRouter, project_id: &str) -> Self {
+        // Déterminer la racine du workspace : si project_id correspond à un chemin de dossier existant
+        let ws_path = if Path::new(project_id).exists() {
+            PathBuf::from(project_id)
+        } else {
+            // Chercher dans la table projects si configuré
+            let found_path: Option<String> = conn.query_row(
+                "SELECT root_path FROM projects WHERE id = ?1",
+                params![project_id],
+                |r| r.get(0),
+            ).ok();
+            found_path.map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
+        };
+
         Self {
             conn,
             router,
             project_id: project_id.to_string(),
-            max_steps: 8,
+            workspace_root: ws_path,
+            max_steps: 12,
         }
+    }
+
+    pub fn with_workspace(mut self, root: impl AsRef<Path>) -> Self {
+        self.workspace_root = root.as_ref().to_path_buf();
+        self
     }
 
     fn record_trace(
@@ -51,81 +78,316 @@ impl<'a> ReActEngine<'a> {
         ).ok();
     }
 
-    fn dispatch_tool(&self, name: &str, args: &Value, run_id: &str) -> String {
+    /// Dispatch des outils classiques & gouvernance
+    fn dispatch_tool(
+        &self,
+        name: &str,
+        args: &Value,
+        policy: &PolicyConfig,
+        failure_counts: &mut HashMap<String, usize>,
+    ) -> (String, Option<String>) {
         match name {
+            // === OUTILS DE GOUVERNANCE ===
+
+            // 1. write_code (Mode 2 - Sandbox Shadow)
+            "write_code" => {
+                let target_contract_id = args["target_contract_id"].as_str().or_else(|| args["contract_id"].as_str()).unwrap_or("");
+                let target_file = args["target_file"].as_str().unwrap_or("");
+                let patch = args["patch"].as_str().unwrap_or("");
+
+                // Vérification cryptographique stricte du SHA-256 vs invariants.lock
+                if let Err(e) = verify_invariants_lock(&self.workspace_root, &policy.invariants_file, &policy.lock_file) {
+                    return (serde_json::json!({
+                        "status": "INTEGRITY_VIOLATION",
+                        "error": format!("Arrêt immédiat : Violation de l'intégrité cryptographique du scellement d'invariants : {}", e)
+                    }).to_string(), None);
+                }
+
+                // Charger le contrat correspondant
+                let inv_path = self.workspace_root.join(&policy.invariants_file);
+                let inv_content = match std::fs::read_to_string(&inv_path) {
+                    Ok(c) => c,
+                    Err(e) => return (serde_json::json!({"status": "error", "error": format!("Lecture invariants.json: {}", e)}).to_string(), None),
+                };
+                let inv_file: InvariantsFile = match serde_json::from_str(&inv_content) {
+                    Ok(f) => f,
+                    Err(e) => return (serde_json::json!({"status": "error", "error": format!("Parse invariants.json: {}", e)}).to_string(), None),
+                };
+
+                let target_contract = match inv_file.contracts.iter().find(|c| c.id == target_contract_id) {
+                    Some(c) => c,
+                    None => return (serde_json::json!({
+                        "status": "error",
+                        "error": format!("Contrat d'invariants '{}' introuvable dans .ide/invariants.json", target_contract_id)
+                    }).to_string(), None),
+                };
+
+                // Exécution dans le shadow worktree
+                let runner = ShadowRunner::new(&self.workspace_root, &policy.shadow_env.path, policy.shadow_env.timeout_ms);
+                let exec_result = runner.execute_contract_patch(target_contract, target_file, patch);
+
+                if exec_result.success {
+                    // Réinitialiser les échecs consécutifs pour les sondes de ce contrat
+                    for p in &target_contract.probes {
+                        failure_counts.remove(&p.probe_id);
+                    }
+                    (serde_json::json!({
+                        "status": "SUCCESS",
+                        "contract_id": target_contract_id,
+                        "merged_to_workspace": true,
+                        "message": format!("Patch validé avec succès sur 100% des sondes et fusionné dans le projet réel ({})", target_file),
+                        "probes": exec_result.probes
+                    }).to_string(), None)
+                } else {
+                    // Échec d'au moins une sonde : trouver la sonde défaillante et incrémenter son compteur
+                    let mut failed_probe_id = String::new();
+                    for p in &exec_result.probes {
+                        if !p.passed {
+                            failed_probe_id = p.probe_id.clone();
+                            let count = failure_counts.entry(p.probe_id.clone()).or_insert(0);
+                            *count += 1;
+                            break;
+                        }
+                    }
+
+                    let cur_count = if !failed_probe_id.is_empty() {
+                        *failure_counts.get(&failed_probe_id).unwrap_or(&1)
+                    } else { 1 };
+
+                    if cur_count >= policy.guardrails.max_consecutive_failures {
+                        let alert_msg = format!(
+                            "SEUIL CRITIQUE ATTEINT : {} échecs consécutifs sur la sonde '{}'. L'outil write_code est maintenant BLOQUÉ. Vous DEVEZ obligatoirement appeler 'report_checkpoint_status' pour fournir un diagnostic de cause racine et une stratégie avant toute reprise.",
+                            cur_count, failed_probe_id
+                        );
+                        (serde_json::json!({
+                            "status": "FAILURE_THRESHOLD_EXCEEDED",
+                            "consecutive_failures": cur_count,
+                            "failed_probe_id": failed_probe_id,
+                            "failure_reason": exec_result.failure_reason,
+                            "probes": exec_result.probes,
+                            "directive": alert_msg
+                        }).to_string(), None)
+                    } else {
+                        (serde_json::json!({
+                            "status": "PROBE_FAILED",
+                            "consecutive_failures": cur_count,
+                            "failed_probe_id": failed_probe_id,
+                            "failure_reason": exec_result.failure_reason,
+                            "probes": exec_result.probes,
+                            "message": "Le patch a échoué en sandbox shadow worktree. L'espace de travail réel est resté 100% intact. Corrigez le code."
+                        }).to_string(), None)
+                    }
+                }
+            }
+
+            // 2. submit_invariants (Mode 3 Architecture)
+            "submit_invariants" => {
+                let invariants_val = &args["invariants"];
+                let inv_path = self.workspace_root.join(&policy.invariants_file);
+                if let Some(parent) = inv_path.parent() {
+                    std::fs::create_dir_all(parent).ok();
+                }
+
+                // Déverrouiller temporairement si existant
+                crate::governance::invariants::set_file_readonly(&inv_path, false).ok();
+                match serde_json::to_string_pretty(invariants_val) {
+                    Ok(json_str) => match std::fs::write(&inv_path, &json_str) {
+                        Ok(_) => {
+                            let hash = crate::governance::invariants::sha256_hex(json_str.as_bytes());
+                            (serde_json::json!({
+                                "status": "submitted",
+                                "file": policy.invariants_file,
+                                "sha256": hash,
+                                "message": "Invariants enregistrés dans .ide/invariants.json. Vous devez maintenant appeler 'request_architecture_review' pour soumettre à l'approbation humaine."
+                            }).to_string(), None)
+                        }
+                        Err(e) => (serde_json::json!({"status": "error", "error": format!("Écriture invariants: {}", e)}).to_string(), None),
+                    },
+                    Err(e) => (serde_json::json!({"status": "error", "error": format!("Sérialisation invariants: {}", e)}).to_string(), None),
+                }
+            }
+
+            // 3. request_architecture_review (Interruption asynchrone pour revue humaine)
+            "request_architecture_review" => {
+                let summary = args["summary"].as_str().unwrap_or("");
+                let hash = args["invariants_hash"].as_str().unwrap_or("");
+                (serde_json::json!({
+                    "status": "awaiting_approval",
+                    "action": "architecture_review",
+                    "summary": summary,
+                    "invariants_hash": hash,
+                    "message": "Revue d'architecture demandée. En attente de confirmation humaine dans l'UI Hernest IDE..."
+                }).to_string(), Some("AwaitingArchitectureReview".to_string()))
+            }
+
+            // 4. query_invariants (Mode 2)
+            "query_invariants" => {
+                let target = args["target_file_or_symbol"].as_str().or_else(|| args["contract_id"].as_str()).unwrap_or("");
+                let inv_path = self.workspace_root.join(&policy.invariants_file);
+                if !inv_path.exists() {
+                    return (serde_json::json!({"status": "not_found", "message": "Aucun fichier invariants.json trouvé"}).to_string(), None);
+                }
+                match std::fs::read_to_string(&inv_path) {
+                    Ok(content) => {
+                        let inv_file: Result<InvariantsFile, _> = serde_json::from_str(&content);
+                        match inv_file {
+                            Ok(f) => {
+                                if target.is_empty() {
+                                    (serde_json::json!({
+                                        "status": "success",
+                                        "project_id": f.project_id,
+                                        "contracts": f.contracts
+                                    }).to_string(), None)
+                                } else {
+                                    let matched: Vec<_> = f.contracts.into_iter().filter(|c| {
+                                        c.id == target || c.target_file == target || c.symbols.iter().any(|s| s.name == target)
+                                    }).collect();
+                                    (serde_json::json!({
+                                        "status": "success",
+                                        "query": target,
+                                        "matched_contracts": matched
+                                    }).to_string(), None)
+                                }
+                            }
+                            Err(e) => (serde_json::json!({"status": "error", "error": format!("Parse: {}", e)}).to_string(), None),
+                        }
+                    }
+                    Err(e) => (serde_json::json!({"status": "error", "error": format!("Lecture: {}", e)}).to_string(), None),
+                }
+            }
+
+            // 5. request_contract_mutation (Interruption asynchrone pour mutation humaine)
+            "request_contract_mutation" => {
+                let contract_id = args["target_contract_id"].as_str().or_else(|| args["contract_id"].as_str()).unwrap_or("");
+                let reason = args["reason"].as_str().or_else(|| args["justification"].as_str()).unwrap_or("");
+                let diff = args["diff"].as_str().unwrap_or("");
+                (serde_json::json!({
+                    "status": "awaiting_approval",
+                    "action": "contract_mutation",
+                    "target_contract_id": contract_id,
+                    "reason": reason,
+                    "diff": diff,
+                    "message": "Demande de mutation de contrat soumise. En attente de confirmation humaine dans l'UI..."
+                }).to_string(), Some("AwaitingContractMutation".to_string()))
+            }
+
+            // 6. report_checkpoint_status (Interruption pour checkpoint réflexif)
+            "report_checkpoint_status" => {
+                let probe_id = args["failed_probe_id"].as_str().unwrap_or("");
+                let autopsy = args["root_cause_analysis"].as_str().or_else(|| args["error_autopsy"].as_str()).unwrap_or("");
+                let next_strat = args["next_attempt_strategy"].as_str().or_else(|| args["countermeasure"].as_str()).unwrap_or("");
+                let req_type = args["request_type"].as_str().unwrap_or("authorize_retry_4");
+
+                (serde_json::json!({
+                    "status": "awaiting_approval",
+                    "action": "checkpoint_status",
+                    "failed_probe_id": probe_id,
+                    "root_cause_analysis": autopsy,
+                    "next_attempt_strategy": next_strat,
+                    "request_type": req_type,
+                    "message": "Rapport réflexif d'autopsie soumis. En attente d'autorisation de reprise dans l'UI..."
+                }).to_string(), Some("AwaitingCheckpointAuthorization".to_string()))
+            }
+
+            // === OUTILS STANDARDS ===
             "web_search" => {
                 let query = args["query"].as_str().unwrap_or("");
                 let max = args["max_results"].as_u64().unwrap_or(5) as usize;
                 match search_web(query, max) {
-                    Ok(res) => res.to_string(),
-                    Err(e) => serde_json::json!({"status": "error", "error": e}).to_string(),
+                    Ok(res) => (res.to_string(), None),
+                    Err(e) => (serde_json::json!({"status": "error", "error": e}).to_string(), None),
                 }
             }
             "web_fetch" => {
                 let url = args["url"].as_str().unwrap_or("");
                 let max = args["max_chars"].as_u64().unwrap_or(6000) as usize;
                 match fetch_web_page(url, max) {
-                    Ok(res) => res.to_string(),
-                    Err(e) => serde_json::json!({"status": "error", "error": e}).to_string(),
+                    Ok(res) => (res.to_string(), None),
+                    Err(e) => (serde_json::json!({"status": "error", "error": e}).to_string(), None),
                 }
             }
             "read_file" => {
                 let path = args["path"].as_str().unwrap_or("");
+                let resolved = if Path::new(path).is_absolute() {
+                    PathBuf::from(path)
+                } else {
+                    self.workspace_root.join(path)
+                };
                 let start_line = args["start_line"].as_u64().map(|v| v as usize);
                 let end_line = args["end_line"].as_u64().map(|v| v as usize);
-                match read_file(path, start_line, end_line) {
-                    Ok(res) => res.to_string(),
-                    Err(e) => serde_json::json!({"status": "error", "error": e}).to_string(),
+                match read_file(resolved.to_str().unwrap_or(path), start_line, end_line) {
+                    Ok(res) => (res.to_string(), None),
+                    Err(e) => (serde_json::json!({"status": "error", "error": e}).to_string(), None),
                 }
             }
             "edit_file" => {
+                if policy.mode == GovernanceMode::Architecture {
+                    return (serde_json::json!({
+                        "status": "error",
+                        "error": "Outil 'edit_file' strictement interdit en Mode 3 Architecture. Vous devez uniquement formaliser les invariants avec 'submit_invariants' et 'request_architecture_review'."
+                    }).to_string(), None);
+                }
                 let path = args["path"].as_str().unwrap_or("");
+                let resolved = if Path::new(path).is_absolute() {
+                    PathBuf::from(path)
+                } else {
+                    self.workspace_root.join(path)
+                };
                 let target = args["target"].as_str().unwrap_or("");
                 let replacement = args["replacement"].as_str().unwrap_or("");
-                match edit_file(path, target, replacement) {
-                    Ok(res) => res.to_string(),
-                    Err(e) => serde_json::json!({"status": "error", "error": e}).to_string(),
+                match edit_file(resolved.to_str().unwrap_or(path), target, replacement) {
+                    Ok(res) => (res.to_string(), None),
+                    Err(e) => (serde_json::json!({"status": "error", "error": e}).to_string(), None),
                 }
             }
             "write_file" => {
+                if policy.mode == GovernanceMode::Architecture {
+                    return (serde_json::json!({
+                        "status": "error",
+                        "error": "Outil 'write_file' strictement interdit en Mode 3 Architecture. Zéro écriture de code autorisée avant scellement formel des invariants."
+                    }).to_string(), None);
+                }
                 let path = args["path"].as_str().unwrap_or("");
+                let resolved = if Path::new(path).is_absolute() {
+                    PathBuf::from(path)
+                } else {
+                    self.workspace_root.join(path)
+                };
                 let content = args["content"].as_str().unwrap_or("");
-                match write_file(path, content) {
-                    Ok(res) => res.to_string(),
-                    Err(e) => serde_json::json!({"status": "error", "error": e}).to_string(),
+                match write_file(resolved.to_str().unwrap_or(path), content) {
+                    Ok(res) => (res.to_string(), None),
+                    Err(e) => (serde_json::json!({"status": "error", "error": e}).to_string(), None),
                 }
             }
             "grep_search" => {
                 let query = args["query"].as_str().unwrap_or("");
-                let root = args["root_path"].as_str().unwrap_or(".");
+                let root = args["root_path"].as_str().unwrap_or(self.workspace_root.to_str().unwrap_or("."));
                 let max = args["max_results"].as_u64().map(|v| v as usize);
                 match grep_search(root, query, max) {
-                    Ok(res) => res.to_string(),
-                    Err(e) => serde_json::json!({"status": "error", "error": e}).to_string(),
+                    Ok(res) => (res.to_string(), None),
+                    Err(e) => (serde_json::json!({"status": "error", "error": e}).to_string(), None),
                 }
             }
             "list_files" => {
-                let root = args["root_path"].as_str().unwrap_or(".");
+                let root = args["root_path"].as_str().unwrap_or(self.workspace_root.to_str().unwrap_or("."));
                 let depth = args["max_depth"].as_u64().map(|v| v as usize);
                 match list_files(root, depth) {
-                    Ok(res) => res.to_string(),
-                    Err(e) => serde_json::json!({"status": "error", "error": e}).to_string(),
+                    Ok(res) => (res.to_string(), None),
+                    Err(e) => (serde_json::json!({"status": "error", "error": e}).to_string(), None),
                 }
             }
             "terminal_exec" => {
+                if policy.mode == GovernanceMode::Architecture {
+                    return (serde_json::json!({
+                        "status": "error",
+                        "error": "Outil 'terminal_exec' interdit en Mode 3 Architecture."
+                    }).to_string(), None);
+                }
                 let cmd = args["command"].as_str().unwrap_or("");
                 let timeout = args["timeout_sec"].as_u64().unwrap_or(60);
                 match execute_terminal(cmd, timeout) {
-                    Ok(res) => res.to_string(),
-                    Err(e) => serde_json::json!({"status": "error", "error": e}).to_string(),
-                }
-            }
-            "web_search" => {
-                let q = args["query"].as_str().unwrap_or("");
-                let max = args["max_results"].as_u64().unwrap_or(5) as usize;
-                match search_web(q, max) {
-                    Ok(res) => res.to_string(),
-                    Err(e) => serde_json::json!({"status": "error", "error": e}).to_string(),
+                    Ok(res) => (res.to_string(), None),
+                    Err(e) => (serde_json::json!({"status": "error", "error": e}).to_string(), None),
                 }
             }
             "store_memory" => {
@@ -134,17 +396,17 @@ impl<'a> ReActEngine<'a> {
                 let scope = args["scope"].as_str().unwrap_or("project");
                 let mem = MemoryService::new(self.conn);
                 match mem.store_memory(&self.project_id, key, content, scope, None) {
-                    Ok(msg) => serde_json::json!({"status": "success", "message": msg}).to_string(),
-                    Err(e) => serde_json::json!({"status": "error", "error": e.to_string()}).to_string(),
+                    Ok(msg) => (serde_json::json!({"status": "success", "message": msg}).to_string(), None),
+                    Err(e) => (serde_json::json!({"status": "error", "error": e.to_string()}).to_string(), None),
                 }
             }
             "recall_memory" => {
                 let key = args["key"].as_str().unwrap_or("");
                 let mem = MemoryService::new(self.conn);
                 match mem.recall_memory(&self.project_id, key, None) {
-                    Ok(Some(val)) => serde_json::json!({"status": "success", "key": key, "content": val}).to_string(),
-                    Ok(None) => serde_json::json!({"status": "not_found", "message": format!("Aucune mémoire pour '{}'", key)}).to_string(),
-                    Err(e) => serde_json::json!({"status": "error", "error": e.to_string()}).to_string(),
+                    Ok(Some(val)) => (serde_json::json!({"status": "success", "key": key, "content": val}).to_string(), None),
+                    Ok(None) => (serde_json::json!({"status": "not_found", "message": format!("Aucune mémoire pour '{}'", key)}).to_string(), None),
+                    Err(e) => (serde_json::json!({"status": "error", "error": e.to_string()}).to_string(), None),
                 }
             }
             "invoke_subagent" => {
@@ -152,7 +414,6 @@ impl<'a> ReActEngine<'a> {
                 let task = args["task"].as_str().unwrap_or("");
                 let readonly = args["readonly"].as_bool().unwrap_or(false);
 
-                // Instanciation d'un sous-moteur ReAct dédié avec sandbox d'outils
                 let sub_engine = SubAgentRunner {
                     conn: self.conn,
                     router: self.router,
@@ -163,16 +424,16 @@ impl<'a> ReActEngine<'a> {
                 };
 
                 match sub_engine.run(task) {
-                    Ok(report) => serde_json::json!({
+                    Ok(report) => (serde_json::json!({
                         "status": "success",
                         "subagent_role": role,
                         "report": report
-                    }).to_string(),
-                    Err(e) => serde_json::json!({
+                    }).to_string(), None),
+                    Err(e) => (serde_json::json!({
                         "status": "error",
                         "subagent_role": role,
                         "error": e
-                    }).to_string(),
+                    }).to_string(), None),
                 }
             }
             "kb_search" => {
@@ -184,8 +445,8 @@ impl<'a> ReActEngine<'a> {
                 );
                 let call_args = serde_json::json!({ "product_id": pid, "query": q });
                 match mcp.call_tool("kb_search", &call_args) {
-                    Ok(res) => res.to_string(),
-                    Err(e) => serde_json::json!({"status": "error", "error": e}).to_string(),
+                    Ok(res) => (res.to_string(), None),
+                    Err(e) => (serde_json::json!({"status": "error", "error": e}).to_string(), None),
                 }
             }
             "kb_propose" => {
@@ -203,7 +464,6 @@ impl<'a> ReActEngine<'a> {
                     &["serve".to_string(), "--db".to_string(), r"hernest-bcpe\kb.db".to_string()]
                 );
 
-                // Consultation préliminaire requise par BCPE pour traçabilité
                 mcp.call_tool("kb_search", &serde_json::json!({ "product_id": pid, "query": subject_key })).ok();
 
                 let mut propose_args = serde_json::json!({
@@ -221,11 +481,57 @@ impl<'a> ReActEngine<'a> {
                 if let Some(e) = example { propose_args["example"] = serde_json::json!(e); }
 
                 match mcp.call_tool("kb_propose", &propose_args) {
-                    Ok(res) => res.to_string(),
-                    Err(e) => serde_json::json!({"status": "error", "error": e}).to_string(),
+                    Ok(res) => (res.to_string(), None),
+                    Err(e) => (serde_json::json!({"status": "error", "error": e}).to_string(), None),
                 }
             }
-            _ => serde_json::json!({"status": "error", "error": format!("Outil inconnu : {}", name)}).to_string(),
+            _ => (serde_json::json!({"status": "error", "error": format!("Outil inconnu : {}", name)}).to_string(), None),
+        }
+    }
+
+    /// Filtrage strict des outils exposés au LLM selon la Machine à États (Section 2 du CDC)
+    pub fn get_tools_for_policy(&self, policy: &PolicyConfig) -> Vec<Value> {
+        let std_tools = get_ide_tools_schemas();
+        let gov_tools = get_governance_tools_schemas();
+
+        match policy.mode {
+            // Mode 1 (Normal) : Outils classiques ouverts
+            GovernanceMode::Normal => std_tools,
+
+            // Mode 3 (Architecture / Spec-First) : STRICTEMENT AUCUN write_file / edit_file / terminal_exec
+            // Contrainte 2 : kb_search et consultation autorisés
+            GovernanceMode::Architecture => {
+                let allowed_std = ["read_file", "list_files", "grep_search", "web_search", "web_fetch", "store_memory", "recall_memory", "kb_search"];
+                let allowed_gov = ["submit_invariants", "request_architecture_review"];
+
+                let mut tools: Vec<Value> = std_tools.into_iter()
+                    .filter(|t| allowed_std.contains(&t["function"]["name"].as_str().unwrap_or("")))
+                    .collect();
+
+                let mut g: Vec<Value> = gov_tools.into_iter()
+                    .filter(|t| allowed_gov.contains(&t["function"]["name"].as_str().unwrap_or("")))
+                    .collect();
+
+                tools.append(&mut g);
+                tools
+            }
+
+            // Mode 2 (Contraint / Invariants & Shadow Sandbox)
+            GovernanceMode::Constrained => {
+                let allowed_std = ["read_file", "list_files", "grep_search", "web_search", "web_fetch", "store_memory", "recall_memory", "kb_search", "kb_propose"];
+                let allowed_gov = ["write_code", "query_invariants", "request_contract_mutation", "report_checkpoint_status"];
+
+                let mut tools: Vec<Value> = std_tools.into_iter()
+                    .filter(|t| allowed_std.contains(&t["function"]["name"].as_str().unwrap_or("")))
+                    .collect();
+
+                let mut g: Vec<Value> = gov_tools.into_iter()
+                    .filter(|t| allowed_gov.contains(&t["function"]["name"].as_str().unwrap_or("")))
+                    .collect();
+
+                tools.append(&mut g);
+                tools
+            }
         }
     }
 
@@ -235,6 +541,10 @@ impl<'a> ReActEngine<'a> {
     {
         let start = Instant::now();
         let run_id = format!("run_{}", &uuid::Uuid::new_v4().to_string().replace('-', "")[..12]);
+
+        // Charger ou initialiser la politique du projet (avec garde-fou Contrainte 4)
+        let pm = PolicyManager::new(&self.workspace_root);
+        let policy = pm.load_or_init(None).unwrap_or_default();
 
         // Initialisation du run
         self.conn.execute(
@@ -253,16 +563,22 @@ impl<'a> ReActEngine<'a> {
             }
         }
 
+        // Prompt système adapté selon le Mode de gouvernance
+        let mode_desc = match policy.mode {
+            GovernanceMode::Normal => "MODE 1 (NORMAL) : Tu as un accès libre aux outils de développement usuels.",
+            GovernanceMode::Architecture => "MODE 3 (ARCHITECTURE / SPEC-FIRST) : Interdiction FORMELLE d'écrire ou modifier du code source directement. Tu dois concevoir l'architecture et formaliser les contrats d'invariants avec 'submit_invariants' puis demander la validation humaine via 'request_architecture_review'.",
+            GovernanceMode::Constrained => "MODE 2 (CONTRAINT PAR INVARIANTS) : Toute modification de code passe IMPÉRATIVEMENT par 'write_code' et est validée en sandbox isolée (shadow worktree) par les sondes cryptographiques scellées. Si tu es bloqué par un contrat, utilise 'request_contract_mutation'.",
+        };
+
         let system_prompt = format!(
-            "Tu es Hernest IDE, un ingénieur logiciel agentique d'élite conçu pour coder en pair-programming direct. \
-Tu résous les problèmes de programmation avec une rigueur absolue :
-1. Avant d'écrire ou modifier du code sur une technologie spécifique ou de niche, consulte la Base de Connaissances d'Expérience avec 'kb_search' pour vérifier s'il existe des pièges ('piege') ou des règles ('regle') connus.
-2. Lis le code existant avec 'read_file' ou explore l'arborescence avec 'list_files' / 'grep_search' avant de modifier quoi que ce soit.
-3. Pour modifier un fichier, utilise 'edit_file' avec le bloc 'target' exact (incluant espaces et sauts de ligne).
-4. Utilise 'terminal_exec' pour lancer les builds, linters et tests unitaires (ex: 'cargo check', 'pytest', 'npm test').
-5. APPRENTISSAGE SYSTÉMATIQUE : Dès que tu découvres un bug vicieux, une difficulté résolue, une subtilité d'API ou un comportement inattendu (particulièrement sur des technologies de niche), ENREGISTRE-LE IMMÉDIATEMENT dans la base d'expérience via 'kb_propose' (avec product_id, subject_key, kind='piege'/'regle', title, symptom, cause, correction) afin que ni toi ni aucun autre agent ne reproduise cette erreur à l'avenir !
-6. Utilise 'store_memory' pour retenir les choix d'architectures cruciaux du projet.
-Reste concis, précis et concentré sur l'excellence du code produit.{}",
+            "Tu es Hernest IDE, un ingénieur logiciel agentique d'élite encadré par un système déterministe de gouvernance par invariants cryptographiques.\n\
+            Politique active : {}\n\n\
+            Règles impératives :\n\
+            1. Avant de coder sur une technologie de niche, consulte 'kb_search'.\n\
+            2. Examine scrupuleusement le code existant avec 'read_file' et 'list_files'.\n\
+            3. En cas de bug, découverte ou piège résolu, transmets-le dans la base d'expérience via 'kb_propose'.\n\
+            4. Respecte strictement les règles du mode de gouvernance actif.{}\n",
+            mode_desc,
             memory_context
         );
 
@@ -271,11 +587,12 @@ Reste concis, précis et concentré sur l'excellence du code produit.{}",
             ChatMessage { role: "user".to_string(), content: prompt.to_string(), images: None },
         ];
 
-        let tools = get_ide_tools_schemas();
+        let tools = self.get_tools_for_policy(&policy);
         let mut step_order = 1;
         let mut total_tokens = 0;
         let mut final_answer = String::new();
         let mut active_backend_name = String::from("rust-native");
+        let mut failure_counts: HashMap<String, usize> = HashMap::new();
 
         for _ in 0..self.max_steps {
             let (chat_res, active_backend) = self.router.chat_completion_with_fallback(&messages, Some(&tools))?;
@@ -289,7 +606,7 @@ Reste concis, précis et concentré sur l'excellence du code produit.{}",
                 messages.push(ChatMessage { role: "assistant".to_string(), content: chat_res.content.clone(), images: None });
             }
 
-            // S'il n'y a aucun appel d'outil, nous sommes arrivés à la conclusion finale
+            // S'il n'y a aucun appel d'outil, conclusion
             if chat_res.tool_calls.is_empty() {
                 final_answer = chat_res.content;
                 self.record_trace(&run_id, step_order, "answer", None, &final_answer);
@@ -306,8 +623,8 @@ Reste concis, précis et concentré sur l'excellence du code produit.{}",
                 on_trace(&run_id, step_order, "tool_call", Some(fn_name), &fn_args.to_string(), &active_backend_name);
                 step_order += 1;
 
-                println!("  ⚡ [OUTIL RUST] {} {:?}", fn_name, fn_args);
-                let tool_output = self.dispatch_tool(fn_name, fn_args, &run_id);
+                println!("  ⚡ [GOUVERNANCE IDE] {} {:?}", fn_name, fn_args);
+                let (tool_output, interrupt_action) = self.dispatch_tool(fn_name, fn_args, &policy, &mut failure_counts);
 
                 self.record_trace(&run_id, step_order, "tool_output", Some(fn_name), &tool_output);
                 on_trace(&run_id, step_order, "tool_output", Some(fn_name), &tool_output, &active_backend_name);
@@ -318,6 +635,24 @@ Reste concis, précis et concentré sur l'excellence du code produit.{}",
                     content: format!("Résultat de l'outil '{}' : {}", fn_name, tool_output),
                     images: None,
                 });
+
+                // Contrainte 5 : Interruption propre de la boucle ReAct si une action humaine est requise
+                if let Some(action) = interrupt_action {
+                    let duration_ms = start.elapsed().as_millis();
+                    self.conn.execute(
+                        "UPDATE runs SET status = 'awaiting_approval', completed_at = CURRENT_TIMESTAMP, duration_ms = ?1, total_tokens = ?2 WHERE id = ?3",
+                        params![duration_ms as i64, total_tokens as i64, run_id],
+                    ).ok();
+
+                    return Ok(ReActResult {
+                        run_id,
+                        status: format!("awaiting_approval:{}", action),
+                        answer: tool_output,
+                        steps_count: step_order,
+                        total_tokens,
+                        duration_ms,
+                    });
+                }
             }
         }
 
@@ -354,8 +689,7 @@ pub struct SubAgentRunner<'a> {
 
 impl<'a> SubAgentRunner<'a> {
     fn dispatch_sub_tool(&self, name: &str, args: &Value) -> String {
-        // En mode readonly, interdire l'écriture et l'exécution terminal
-        if self.readonly && (name == "edit_file" || name == "write_file" || name == "terminal_exec") {
+        if self.readonly && (name == "edit_file" || name == "write_file" || name == "terminal_exec" || name == "write_code") {
             return serde_json::json!({
                 "status": "error",
                 "error": format!("Outil '{}' interdit : ce sous-agent opère en mode lecture seule (read-only sandbox)", name)
@@ -419,10 +753,10 @@ impl<'a> SubAgentRunner<'a> {
 
         let sys_prompt = format!(
             "Tu es un SOUS-AGENT spécialisé avec le rôle : '{}'. \
-Tu es invoqué par l'agent coordinateur principal de Hernest IDE pour accomplir une mission ciblée. \
-Mode sandbox : {}. \
-Fouille, explore et synthétise tes résultats avec une extrême rigueur. \
-Ta réponse finale DOIT être un rapport de synthèse ultra-clair, direct et concis (sans bavardage) répondant exactement à la mission.",
+            Tu es invoqué par l'agent coordinateur principal de Hernest IDE pour accomplir une mission ciblée. \
+            Mode sandbox : {}. \
+            Fouille, explore et synthétise tes résultats avec une extrême rigueur. \
+            Ta réponse finale DOIT être un rapport de synthèse ultra-clair, direct et concis (sans bavardage) répondant exactement à la mission.",
             self.role,
             if self.readonly { "LECTURE SEULE (seuls les outils de lecture/recherche sont autorisés)" } else { "STANDARD" }
         );
@@ -433,7 +767,6 @@ Ta réponse finale DOIT être un rapport de synthèse ultra-clair, direct et con
         ];
 
         let all_tools = get_ide_tools_schemas();
-        // Filtrer les outils pour le sous-agent (pas de récursion infinie invoke_subagent)
         let sub_tools: Vec<Value> = all_tools.into_iter()
             .filter(|t| {
                 let n = t["function"]["name"].as_str().unwrap_or("");

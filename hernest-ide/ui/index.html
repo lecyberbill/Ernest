@@ -559,6 +559,12 @@
                     <span id="top-project-name">Projet : Hernest</span>
                     <span style="font-size: 0.65rem;">▼</span>
                 </button>
+
+                <!-- Badge Mode Gouvernance par Invariants -->
+                <div id="governance-badge" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 2px 8px; border-radius: 12px; font-size: 0.68rem; font-family: var(--font-mono); border: 1px solid var(--border-subtle); background: rgba(30, 41, 59, 0.6); color: var(--text-muted); cursor: pointer;" title="Statut de gouvernance d'agent">
+                    <span id="gov-indicator" style="width: 7px; height: 7px; border-radius: 50%; background: #94a3b8;"></span>
+                    <span id="gov-mode-text">Mode 1: Normal</span>
+                </div>
                 <button id="btn-quick-open-top" class="icon-btn" style="border: 1px solid var(--border-subtle); padding: 3px 10px; border-radius: 4px; gap: 0.4rem; font-size: 0.75rem;" title="Rechercher un fichier (Ctrl+P)">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="11" cy="11" r="8"></circle>
@@ -917,6 +923,38 @@
                 <label style="color: var(--text-muted); font-size: 0.7rem;">Chemin dossier racine (relatif ou absolu)</label>
                 <input type="text" id="proj-root-input" placeholder="ex: . ou D:\Projet\MonAutreProjet" style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
             </div>
+
+            <!-- Choix des 3 Modalités de démarrage (Gouvernance d'agent) -->
+            <div style="margin-top: 0.4rem;">
+                <label style="color: var(--accent-cyan); font-weight: 700; font-size: 0.72rem; display: block; margin-bottom: 0.35rem;">
+                    🛡️ Modalité de Gouvernance de l'Agent :
+                </label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.4rem;">
+                    <label class="gov-mode-card" style="border: 1px solid var(--border-subtle); border-radius: 4px; padding: 0.45rem; background: rgba(30, 41, 59, 0.4); cursor: pointer; display: flex; flex-direction: column; gap: 0.2rem;">
+                        <div style="display: flex; align-items: center; gap: 0.3rem;">
+                            <input type="radio" name="proj-gov-mode" value="normal" checked />
+                            <strong style="color: #fff; font-size: 0.72rem;">1. Normal</strong>
+                        </div>
+                        <span style="color: var(--text-muted); font-size: 0.65rem;">Outils ouverts standards (read, write, terminal)</span>
+                    </label>
+
+                    <label class="gov-mode-card" style="border: 1px solid var(--border-subtle); border-radius: 4px; padding: 0.45rem; background: rgba(30, 41, 59, 0.4); cursor: pointer; display: flex; flex-direction: column; gap: 0.2rem;">
+                        <div style="display: flex; align-items: center; gap: 0.3rem;">
+                            <input type="radio" name="proj-gov-mode" value="architecture" />
+                            <strong style="color: #38bdf8; font-size: 0.72rem;">3. Archi Spec-First</strong>
+                        </div>
+                        <span style="color: var(--text-muted); font-size: 0.65rem;">Zéro code écrit. Spécification d'invariants & validation humaine</span>
+                    </label>
+
+                    <label class="gov-mode-card" style="border: 1px solid var(--border-subtle); border-radius: 4px; padding: 0.45rem; background: rgba(30, 41, 59, 0.4); cursor: pointer; display: flex; flex-direction: column; gap: 0.2rem;">
+                        <div style="display: flex; align-items: center; gap: 0.3rem;">
+                            <input type="radio" name="proj-gov-mode" value="constrained" />
+                            <strong style="color: #4ade80; font-size: 0.72rem;">2. Contraint</strong>
+                        </div>
+                        <span style="color: var(--text-muted); font-size: 0.65rem;">write_code sous contrôle Shadow Sandbox & lock SHA-256</span>
+                    </label>
+                </div>
+            </div>
             <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
                 <button id="btn-submit-new-project" class="btn-primary" style="flex: 1; padding: 4px; font-size: 0.72rem;">Créer & Basculer</button>
                 <button id="btn-cancel-new-project" class="icon-btn" style="border: 1px solid var(--border-subtle); padding: 4px 8px; font-size: 0.72rem;">Annuler</button>
@@ -926,6 +964,25 @@
         <div class="palette-list" id="project-list" style="padding: 0.5rem;"></div>
         <div style="padding: 0.4rem 1rem; border-top: 1px solid var(--border-subtle); background: var(--surface-dim); display: flex; justify-content: flex-end;">
             <button id="btn-close-project-modal" class="icon-btn" style="font-size: 0.72rem;">Fermer (Échap)</button>
+        </div>
+    </div>
+
+    <!-- Modal Approbation Humaine de Gouvernance -->
+    <div class="palette-overlay" id="governance-approval-modal" style="width: 620px; z-index: 10000;">
+        <div class="palette-input-box" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--accent-cyan);">
+            <div style="font-weight: 700; color: #fff; font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem;">
+                <span id="gov-modal-title">🛡️ VALIDATION HUMAINE D'ARCHITECTURE</span>
+            </div>
+            <span id="gov-modal-badge" style="font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; background: rgba(56, 189, 248, 0.2); color: #38bdf8;">Mode 3 &rarr; Mode 2</span>
+        </div>
+
+        <div id="gov-modal-body" style="padding: 1rem; max-height: 400px; overflow-y: auto; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-main); display: flex; flex-direction: column; gap: 0.75rem;">
+            <!-- Contenu dynamique : diff, diagnostic ou résumé -->
+        </div>
+
+        <div style="padding: 0.6rem 1rem; border-top: 1px solid var(--border-subtle); background: var(--surface-dim); display: flex; justify-content: flex-end; gap: 0.5rem;">
+            <button id="btn-gov-reject" class="icon-btn" style="border: 1px solid var(--border-subtle); padding: 4px 12px; font-size: 0.75rem;">Refuser</button>
+            <button id="btn-gov-approve" class="btn-primary" style="padding: 4px 14px; font-size: 0.75rem;">Approuver & Sceller</button>
         </div>
     </div>
 
