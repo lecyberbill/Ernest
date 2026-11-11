@@ -49,9 +49,9 @@ EARNEST is composed of three self-reinforcing, modular pillars:
 │ (Governance UI)  │  MCP  │ (Agent Runtime)  │  RAG  │ (Experience KB)  │
 └──────────────────┘       └──────────────────┘       └──────────────────┘
          │                           │                           │
-  - Spec-First / Modes        - Moteur ReAct              - Retours d'essais
-  - Invariants scellés        - Shadow Worktree           - Heuristiques / Fixes
-  - Interrupteur Humain       - Arbitre cryptographique   - Anti-répétition d'erreurs
+  - Spec-First / Modes        - ReAct Engine              - Trial Feedbacks
+  - Sealed Invariants         - Shadow Worktree           - Heuristics & Fixes
+  - Human Circuit Breaker     - Cryptographic Arbiter     - Error De-duplication
 ```
 
 ### 1. 🛡️ EARNEST IDE (`earnest-ide`)
@@ -198,3 +198,4 @@ Dual-licensed under either of:
 - [MIT License](LICENSE-MIT)
 
 at your option.
+
