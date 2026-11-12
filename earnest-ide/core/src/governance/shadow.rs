@@ -2,9 +2,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-use super::invariants::{ContractSpec, InvariantsFile, ProbeSpec};
+use super::invariants::{ContractSpec, ProbeSpec};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProbeRunResult {
@@ -28,6 +27,7 @@ pub struct ShadowExecutionResult {
 pub struct ShadowRunner {
     workspace_root: PathBuf,
     shadow_path: PathBuf,
+    #[allow(dead_code)]
     timeout_ms: u64,
 }
 

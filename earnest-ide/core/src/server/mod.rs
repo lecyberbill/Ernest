@@ -2,7 +2,7 @@ pub mod assets;
 
 use std::sync::Arc;
 use std::thread;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::fs;
 use tiny_http::{Server, Response, Header, Method};
 use serde_json::Value;
@@ -13,7 +13,7 @@ use crate::db::memories::MemoryService;
 use crate::llm::router::LLMRouter;
 use crate::engine::react::ReActEngine;
 use crate::tools::get_ide_tools_schemas;
-use crate::tools::fs::{read_file, write_file, edit_file, rename_file_or_dir, delete_file_or_dir, create_directory};
+use crate::tools::fs::{write_file, rename_file_or_dir, delete_file_or_dir, create_directory};
 use crate::tools::search::{grep_search, list_files, list_directory_entries};
 use crate::tools::terminal::execute_terminal;
 use crate::tools::git::{get_git_status, get_git_diff, git_commit};
@@ -1043,7 +1043,7 @@ Garde l'indentation appropriée.";
             let mut policy = pm.load_or_init(None).unwrap_or_default();
 
             let inv_path = root_path.join(&policy.invariants_file);
-            let lock_path = root_path.join(&policy.lock_file);
+            let _lock_path = root_path.join(&policy.lock_file);
 
             if !inv_path.exists() {
                 let resp = Response::from_string(serde_json::json!({
@@ -1347,7 +1347,7 @@ Garde l'indentation appropriée.";
 }
 
 fn serve_static_asset(req: tiny_http::Request, path: &str) {
-    let mut asset_path = if path == "/" || path.is_empty() {
+    let asset_path = if path == "/" || path.is_empty() {
         "index.html".to_string()
     } else {
         path.trim_start_matches('/').to_string()

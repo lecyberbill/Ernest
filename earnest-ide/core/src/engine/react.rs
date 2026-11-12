@@ -14,8 +14,8 @@ use crate::tools::web::{search_web, fetch_web_page};
 use crate::tools::{get_ide_tools_schemas, get_governance_tools_schemas};
 use crate::governance::{
     GovernanceMode, PolicyManager, PolicyConfig,
-    InvariantsFile, verify_invariants_lock, seal_invariants,
-    ShadowRunner, AuditLogger, AuditEntry
+    InvariantsFile, verify_invariants_lock,
+    ShadowRunner
 };
 
 pub struct ReActResult {
@@ -591,7 +591,7 @@ impl<'a> ReActEngine<'a> {
         let mut step_order = 1;
         let mut total_tokens = 0;
         let mut final_answer = String::new();
-        let mut active_backend_name = String::from("rust-native");
+        let mut active_backend_name;
         let mut failure_counts: HashMap<String, usize> = HashMap::new();
 
         for _ in 0..self.max_steps {

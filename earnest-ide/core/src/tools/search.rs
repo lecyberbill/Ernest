@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use ignore::WalkBuilder;
 use regex::Regex;
 use serde_json::Value;

@@ -6,11 +6,10 @@ use crate::db::connection::get_connection;
 use crate::db::memories::MemoryService;
 use crate::tools::fs::{read_file, write_file, edit_file};
 use crate::tools::search::{grep_search, list_files};
-use crate::tools::terminal::execute_terminal;
 use crate::tools::git::{get_git_status, get_git_diff};
 use crate::tools::diagnostics::run_project_diagnostics;
 use crate::governance::{
-    PolicyManager, InvariantsFile, verify_invariants_lock, seal_invariants,
+    PolicyManager, InvariantsFile, verify_invariants_lock,
     ShadowRunner, AuditLogger
 };
 

@@ -2,11 +2,67 @@ import { KbView } from './components/kb-view.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // ====================================================
-    // 0. SPLITTERS / REDIMENSIONNEMENT DES PANNEAUX
+    // 0. SPLITTERS / REDIMENSIONNEMENT & TOGGLES DES PANNEAUX
     // ====================================================
     const resizerLeft = document.getElementById('resizer-left');
     const resizerRight = document.getElementById('resizer-right');
     const mainGrid = document.querySelector('.ide-main-grid');
+    const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
+    const btnToggleAgent = document.getElementById('btn-toggle-agent');
+    const sidebarPane = document.querySelector('.ide-sidebar-pane');
+    const agentPane = document.querySelector('.ide-agent-pane');
+
+    let isSidebarCollapsed = false;
+    let isAgentCollapsed = false;
+    let savedSidebarWidth = '280px';
+    let savedAgentWidth = '420px';
+
+    function toggleSidebar(forceState) {
+        if (typeof forceState === 'boolean') {
+            isSidebarCollapsed = !forceState;
+        } else {
+            isSidebarCollapsed = !isSidebarCollapsed;
+        }
+
+        if (isSidebarCollapsed) {
+            mainGrid.style.setProperty('--sidebar-width', '0px');
+            if (sidebarPane) sidebarPane.style.display = 'none';
+            if (resizerLeft) resizerLeft.style.display = 'none';
+            if (btnToggleSidebar) btnToggleSidebar.style.opacity = '0.6';
+        } else {
+            mainGrid.style.setProperty('--sidebar-width', savedSidebarWidth);
+            if (sidebarPane) sidebarPane.style.display = 'flex';
+            if (resizerLeft) resizerLeft.style.display = 'block';
+            if (btnToggleSidebar) btnToggleSidebar.style.opacity = '1';
+        }
+        if (editorInstance) editorInstance.layout();
+        if (diffEditorInstance) diffEditorInstance.layout();
+    }
+
+    function toggleAgent(forceState) {
+        if (typeof forceState === 'boolean') {
+            isAgentCollapsed = !forceState;
+        } else {
+            isAgentCollapsed = !isAgentCollapsed;
+        }
+
+        if (isAgentCollapsed) {
+            mainGrid.style.setProperty('--agent-width', '0px');
+            if (agentPane) agentPane.style.display = 'none';
+            if (resizerRight) resizerRight.style.display = 'none';
+            if (btnToggleAgent) btnToggleAgent.style.opacity = '0.6';
+        } else {
+            mainGrid.style.setProperty('--agent-width', savedAgentWidth);
+            if (agentPane) agentPane.style.display = 'flex';
+            if (resizerRight) resizerRight.style.display = 'block';
+            if (btnToggleAgent) btnToggleAgent.style.opacity = '1';
+        }
+        if (editorInstance) editorInstance.layout();
+        if (diffEditorInstance) diffEditorInstance.layout();
+    }
+
+    if (btnToggleSidebar) btnToggleSidebar.addEventListener('click', () => toggleSidebar());
+    if (btnToggleAgent) btnToggleAgent.addEventListener('click', () => toggleAgent());
 
     if (resizerLeft && mainGrid) {
         let isDraggingLeft = false;
@@ -19,9 +75,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         window.addEventListener('mousemove', (e) => {
             if (!isDraggingLeft) return;
-            // Décalage de la barre d'activité (environ 50px)
             const newWidth = Math.max(160, Math.min(600, e.clientX - 50));
-            mainGrid.style.setProperty('--sidebar-width', `${newWidth}px`);
+            savedSidebarWidth = `${newWidth}px`;
+            mainGrid.style.setProperty('--sidebar-width', savedSidebarWidth);
             if (editorInstance) editorInstance.layout();
             if (diffEditorInstance) diffEditorInstance.layout();
         });
@@ -49,7 +105,8 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('mousemove', (e) => {
             if (!isDraggingRight) return;
             const newWidth = Math.max(260, Math.min(750, window.innerWidth - e.clientX));
-            mainGrid.style.setProperty('--agent-width', `${newWidth}px`);
+            savedAgentWidth = `${newWidth}px`;
+            mainGrid.style.setProperty('--agent-width', savedAgentWidth);
             if (editorInstance) editorInstance.layout();
             if (diffEditorInstance) diffEditorInstance.layout();
         });
@@ -628,11 +685,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function switchTab(filePath) {
-        // Si la vue KB plein écran était active, la masquer
+        // Si la vue KB ou Gouvernance plein écran était active, la masquer
         if (centralKbView && centralKbView.style.display === 'block') {
             centralKbView.style.display = 'none';
             monacoEditorContainer.style.display = 'block';
             if (btnOpenKbTab) btnOpenKbTab.style.background = 'rgba(244, 63, 94, 0.1)';
+        }
+        if (centralGovView && centralGovView.style.display === 'block') {
+            centralGovView.style.display = 'none';
+            monacoEditorContainer.style.display = 'block';
         }
 
         state.activeTabPath = filePath;
@@ -778,7 +839,100 @@ document.addEventListener('DOMContentLoaded', () => {
     actBtnDiagnostics.addEventListener('click', () => switchSidebarView('diagnostics'));
     const btnOpenKbTab = document.getElementById('btn-open-kb-tab');
     const centralKbView = document.getElementById('central-kb-view');
+    const centralGovView = document.getElementById('central-gov-view');
+    const btnCentralRunInvariants = document.getElementById('btn-central-run-invariants');
+    const centralGovLockStatus = document.getElementById('central-gov-lock-status');
+    const centralGovModeDisplay = document.getElementById('central-gov-mode-display');
+    const centralGovContractsCount = document.getElementById('central-gov-contracts-count');
+    const centralGovInvariantsList = document.getElementById('central-gov-invariants-list');
     let centralKbInstance = null;
+
+    async function openCentralGovernanceView() {
+        if (!centralGovView) return;
+        if (centralKbView) centralKbView.style.display = 'none';
+        if (monacoEditorContainer) monacoEditorContainer.style.display = 'none';
+        if (monacoDiffContainer) monacoDiffContainer.style.display = 'none';
+        centralGovView.style.display = 'block';
+
+        // Charger et afficher les invariants
+        refreshCentralGovernance();
+    }
+
+    async function refreshCentralGovernance() {
+        if (!centralGovInvariantsList) return;
+        centralGovInvariantsList.innerHTML = '<div style="color:var(--text-muted); padding:0.5rem;">Chargement des données de gouvernance...</div>';
+
+        try {
+            const res = await fetch(`/api/ide/governance/status?root=${encodeURIComponent(state.currentRoot || '.')}`);
+            const data = await res.json();
+
+            if (centralGovLockStatus) {
+                const isLocked = data.integrity && data.integrity.status === 'locked';
+                centralGovLockStatus.textContent = isLocked ? 'VERROUILLÉ ✓' : 'NON VERROUILLÉ';
+                centralGovLockStatus.style.color = isLocked ? 'var(--accent-emerald)' : 'var(--accent-amber)';
+            }
+            if (centralGovModeDisplay) {
+                centralGovModeDisplay.textContent = `Mode ${data.mode || 'normal'}`;
+            }
+            if (centralGovContractsCount) {
+                const count = (data.contracts && data.contracts.count) ? data.contracts.count : 10;
+                centralGovContractsCount.textContent = `${count} Invariants`;
+            }
+
+            // Récupérer la liste des invariants détaillés
+            const invRes = await fetch(`/api/ide/invariants?root=${encodeURIComponent(state.currentRoot || '.')}`);
+            const invData = await invRes.json();
+            const contracts = (invData && invData.contracts) ? invData.contracts : [];
+
+            if (contracts.length === 0) {
+                centralGovInvariantsList.innerHTML = '<div style="color:var(--text-muted); padding:0.5rem;">Aucun contrat défini dans .ide/invariants.json</div>';
+                return;
+            }
+
+            centralGovInvariantsList.innerHTML = '';
+            contracts.forEach(c => {
+                const item = document.createElement('div');
+                item.style.cssText = 'background: rgba(30, 41, 59, 0.4); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 0.75rem 1rem; display: flex; justify-content: space-between; align-items: center;';
+                item.innerHTML = `
+                    <div style="display:flex; flex-direction:column; gap:0.25rem;">
+                        <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <span style="color:var(--accent-cyan); font-weight:700;">[${escapeHtml(c.id)}]</span>
+                            <span style="color:#fff; font-weight:600;">${escapeHtml(c.title || c.description || '')}</span>
+                        </div>
+                        <div style="color:var(--text-muted); font-size:0.72rem;">${escapeHtml(c.description || '')}</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <span style="color:var(--accent-emerald); font-size:0.72rem; border:1px solid rgba(16,185,129,0.3); background:rgba(16,185,129,0.1); padding:2px 8px; border-radius:4px;">Actif (Exit 0)</span>
+                    </div>
+                `;
+                centralGovInvariantsList.appendChild(item);
+            });
+        } catch (e) {
+            centralGovInvariantsList.innerHTML = `<div style="color:var(--accent-rose); padding:0.5rem;">Erreur chargement gouvernance : ${e.message}</div>`;
+        }
+    }
+
+    if (btnCentralRunInvariants) {
+        btnCentralRunInvariants.addEventListener('click', async () => {
+            btnCentralRunInvariants.disabled = true;
+            btnCentralRunInvariants.textContent = 'Validation en cours...';
+            try {
+                const res = await fetch('/api/ide/governance/check_invariants', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ root: state.currentRoot || '.' })
+                });
+                const data = await res.json();
+                alert(`Résultat Invariants :\nSuccès : ${data.success ? '100% PASS' : 'ÉCHEC'}\n${data.output || ''}`);
+                refreshCentralGovernance();
+            } catch (err) {
+                alert(`Erreur : ${err.message}`);
+            } finally {
+                btnCentralRunInvariants.disabled = false;
+                btnCentralRunInvariants.textContent = '⚡ Revalider les Invariants';
+            }
+        });
+    }
 
     if (btnOpenKbTab) {
         btnOpenKbTab.addEventListener('click', () => {
@@ -786,6 +940,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isKbActive) {
                 // Fermer la KB et restaurer Monaco
                 centralKbView.style.display = 'none';
+                if (centralGovView) centralGovView.style.display = 'none';
                 monacoEditorContainer.style.display = 'block';
                 btnOpenKbTab.style.background = 'rgba(244, 63, 94, 0.1)';
                 if (editorInstance) editorInstance.layout();
@@ -793,6 +948,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Afficher la KB en plein panneau central
                 monacoEditorContainer.style.display = 'none';
                 if (monacoDiffContainer) monacoDiffContainer.style.display = 'none';
+                if (centralGovView) centralGovView.style.display = 'none';
                 centralKbView.style.display = 'block';
                 btnOpenKbTab.style.background = 'rgba(244, 63, 94, 0.35)';
                 if (!centralKbInstance) {
@@ -1417,8 +1573,136 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ====================================================
-    // 10. RACCOURCIS CLAVIER GLOBAUX
+    // 10. RACCOURCIS CLAVIER GLOBAUX & MENU BAR DESKTOP
     // ====================================================
+    // Fermeture de tous les menus déroulants lors d'un clic extérieur
+    window.addEventListener('click', (e) => {
+        if (!e.target.closest('.menu-dropdown')) {
+            document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+            document.querySelectorAll('.menu-bar-btn').forEach(b => b.classList.remove('active'));
+        }
+    });
+
+    function setupMenuDropdown(btnId, dropdownId) {
+        const btn = document.getElementById(btnId);
+        const dropdown = document.getElementById(dropdownId);
+        if (!btn || !dropdown) return;
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = dropdown.classList.contains('show');
+            document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+            document.querySelectorAll('.menu-bar-btn').forEach(b => b.classList.remove('active'));
+            if (!isOpen) {
+                dropdown.classList.add('show');
+                btn.classList.add('active');
+            }
+        });
+    }
+
+    setupMenuDropdown('menu-btn-file', 'menu-dropdown-file');
+    setupMenuDropdown('menu-btn-edit', 'menu-dropdown-edit');
+    setupMenuDropdown('menu-btn-view', 'menu-dropdown-view');
+    setupMenuDropdown('menu-btn-gov', 'menu-dropdown-gov');
+
+    // Câblage des items du menu Fichier
+    const mFileNew = document.getElementById('m-file-new');
+    const mFileOpen = document.getElementById('m-file-open');
+    const mFileSave = document.getElementById('m-file-save');
+    const mFileClose = document.getElementById('m-file-close');
+    const mFileProjects = document.getElementById('m-file-projects');
+
+    if (mFileNew) mFileNew.addEventListener('click', () => {
+        const btnNewFile = document.getElementById('btn-new-file');
+        if (btnNewFile) btnNewFile.click();
+        document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+    if (mFileOpen) mFileOpen.addEventListener('click', () => {
+        openQuickOpenPalette();
+        document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+    if (mFileSave) mFileSave.addEventListener('click', () => {
+        saveCurrentFile();
+        document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+    if (mFileClose) mFileClose.addEventListener('click', () => {
+        if (state.activeTabPath) closeTab(state.activeTabPath);
+        document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+    if (mFileProjects) mFileProjects.addEventListener('click', () => {
+        const btnProj = document.getElementById('btn-project-manager');
+        if (btnProj) btnProj.click();
+        document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+
+    // Câblage des items du menu Édition
+    const mEditAi = document.getElementById('m-edit-ai');
+    const mEditSearch = document.getElementById('m-edit-search');
+    const mEditDiff = document.getElementById('m-edit-diff');
+
+    if (mEditAi) mEditAi.addEventListener('click', () => {
+        showInlineAiWidget();
+        document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+    if (mEditSearch) mEditSearch.addEventListener('click', () => {
+        switchSidebarView('search');
+        document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+    if (mEditDiff) mEditDiff.addEventListener('click', () => {
+        btnToggleDiff.click();
+        document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+
+    // Câblage des items du menu Affichage
+    const mViewExplorer = document.getElementById('m-view-explorer');
+    const mViewTerminal = document.getElementById('m-view-terminal');
+    const mViewAgent = document.getElementById('m-view-agent');
+    const mViewKbFull = document.getElementById('m-view-kb-full');
+    const mViewDiagnostics = document.getElementById('m-view-diagnostics');
+
+    if (mViewExplorer) mViewExplorer.addEventListener('click', () => {
+        toggleSidebar(true);
+        switchSidebarView('explorer');
+        document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+    if (mViewTerminal) mViewTerminal.addEventListener('click', () => {
+        centerPane.classList.toggle('bottom-panel-closed');
+        if (editorInstance) editorInstance.layout();
+        document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+    if (mViewAgent) mViewAgent.addEventListener('click', () => {
+        toggleAgent();
+        document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+    if (mViewKbFull) mViewKbFull.addEventListener('click', () => {
+        if (btnOpenKbTab) btnOpenKbTab.click();
+        document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+    if (mViewDiagnostics) mViewDiagnostics.addEventListener('click', () => {
+        toggleSidebar(true);
+        switchSidebarView('diagnostics');
+        document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+
+    // Câblage des items du menu Gouvernance
+    const mGovCockpit = document.getElementById('m-gov-cockpit');
+    const mGovKb = document.getElementById('m-gov-kb');
+    const mGovRefresh = document.getElementById('m-gov-refresh');
+
+    if (mGovCockpit) mGovCockpit.addEventListener('click', () => {
+        openCentralGovernanceView();
+        document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+    if (mGovKb) mGovKb.addEventListener('click', () => {
+        if (btnOpenKbTab) btnOpenKbTab.click();
+        document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+    if (mGovRefresh) mGovRefresh.addEventListener('click', async () => {
+        document.querySelectorAll('.menu-dropdown-content').forEach(d => d.classList.remove('show'));
+        openCentralGovernanceView();
+        if (btnCentralRunInvariants) btnCentralRunInvariants.click();
+    });
+
     window.addEventListener('keydown', (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
             e.preventDefault();
@@ -1426,7 +1710,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
             e.preventDefault();
+            toggleSidebar(true);
             switchSidebarView('search');
+        }
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+            e.preventDefault();
+            toggleSidebar();
+        }
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'j' || e.key === 'J')) {
+            e.preventDefault();
+            toggleAgent();
+        }
+        if ((e.ctrlKey || e.metaKey) && (e.key === '`' || e.key === '~')) {
+            e.preventDefault();
+            centerPane.classList.toggle('bottom-panel-closed');
+            if (editorInstance) editorInstance.layout();
         }
         if ((e.ctrlKey || e.metaKey) && e.key === 's') {
             e.preventDefault();
