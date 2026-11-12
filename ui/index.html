@@ -17,7 +17,9 @@
     <!-- Configuration globale d'interception d'API pour Webview Desktop & Navigateur -->
     <script>
         (function() {
-            const isCustomScheme = window.location.protocol === 'tauri:' || window.location.protocol === 'file:' || window.location.hostname === 'tauri.localhost';
+            const isTauriDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const isTauriBuiltin = window.location.port !== '8080';
+            const isCustomScheme = window.location.protocol === 'tauri:' || window.location.protocol === 'file:' || window.location.hostname === 'tauri.localhost' || (isTauriDev && isTauriBuiltin);
             window.__EARNEST_API_BASE__ = isCustomScheme ? 'http://127.0.0.1:8080' : window.location.origin;
             
             // Interception native de fetch pour rediriger automatiquement /api/* vers http://127.0.0.1:8080 en mode Desktop

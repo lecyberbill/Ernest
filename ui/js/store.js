@@ -1,7 +1,9 @@
 class Store {
     constructor() {
-        // En mode Tauri / file:// / tauri://, window.location.origin ne pointe pas sur le serveur HTTP 8080
-        const isTauriOrCustomScheme = window.location.protocol === 'tauri:' || window.location.protocol === 'file:' || window.location.hostname === 'tauri.localhost';
+        // En mode Tauri / file:// / tauri:// ou serveur de dev Tauri (port != 8080)
+        const isTauriDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const isTauriBuiltin = window.location.port !== '8080';
+        const isTauriOrCustomScheme = window.location.protocol === 'tauri:' || window.location.protocol === 'file:' || window.location.hostname === 'tauri.localhost' || (isTauriDev && isTauriBuiltin);
         this.apiBase = isTauriOrCustomScheme ? 'http://127.0.0.1:8080' : window.location.origin;
     }
 

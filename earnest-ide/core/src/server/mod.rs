@@ -504,6 +504,141 @@ fn handle_request(mut req: tiny_http::Request) {
             return;
         }
 
+        // --- COMPATIBILITÉ COCKPIT : RUNS, RUN DETAILS & TELEMETRY ---
+        if path == "/api/runs" {
+            let db_candidates = vec![
+                PathBuf::from("data.db"),
+                PathBuf::from("../../data.db"),
+                PathBuf::from("../data.db"),
+            ];
+            let db_path = db_candidates.into_iter().find(|p| p.exists()).unwrap_or_else(|| PathBuf::from("data.db"));
+            let proj_id = query.get("project_id").map(|s| s.as_str()).unwrap_or("default_workspace");
+
+            let mut runs = Vec::new();
+            if let Ok(conn) = rusqlite::Connection::open(&db_path) {
+                if let Ok(mut stmt) = conn.prepare("SELECT id, project_id, prompt, status, model, total_tokens, execution_time_ms, created_at, finished_at FROM runs WHERE project_id = ? ORDER BY created_at DESC LIMIT 30") {
+                    let rows = stmt.query_map(rusqlite::params![proj_id], |row| {
+                        Ok(serde_json::json!({
+                            "id": row.get::<_, String>(0)?,
+                            "project_id": row.get::<_, String>(1)?,
+                            "prompt": row.get::<_, String>(2)?,
+                            "status": row.get::<_, String>(3)?,
+                            "model": row.get::<_, Option<String>>(4)?.unwrap_or_else(|| "default".to_string()),
+                            "total_tokens": row.get::<_, Option<i64>>(5)?.unwrap_or(0),
+                            "execution_time_ms": row.get::<_, Option<i64>>(6)?.unwrap_or(0),
+                            "created_at": row.get::<_, Option<String>>(7)?.unwrap_or_default(),
+                            "finished_at": row.get::<_, Option<String>>(8)?,
+                        }))
+                    });
+                    if let Ok(mapped) = rows {
+                        for r in mapped.flatten() {
+                            runs.push(r);
+                        }
+                    }
+                }
+            }
+
+            let resp = Response::from_string(serde_json::json!(runs).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/run_details" {
+            let db_candidates = vec![
+                PathBuf::from("data.db"),
+                PathBuf::from("../../data.db"),
+                PathBuf::from("../data.db"),
+            ];
+            let db_path = db_candidates.into_iter().find(|p| p.exists()).unwrap_or_else(|| PathBuf::from("data.db"));
+            let run_id = query.get("run_id").map(|s| s.as_str()).unwrap_or("");
+
+            let mut run_val = serde_json::Value::Null;
+            let mut traces = Vec::new();
+
+            if let Ok(conn) = rusqlite::Connection::open(&db_path) {
+                if let Ok(mut stmt) = conn.prepare("SELECT id, project_id, prompt, status, model, total_tokens, execution_time_ms, created_at, finished_at FROM runs WHERE id = ?") {
+                    if let Ok(mut rows) = stmt.query(rusqlite::params![run_id]) {
+                        if let Ok(Some(row)) = rows.next() {
+                            run_val = serde_json::json!({
+                                "id": row.get::<_, String>(0).unwrap_or_default(),
+                                "project_id": row.get::<_, String>(1).unwrap_or_default(),
+                                "prompt": row.get::<_, String>(2).unwrap_or_default(),
+                                "status": row.get::<_, String>(3).unwrap_or_default(),
+                                "model": row.get::<_, Option<String>>(4).unwrap_or(None).unwrap_or_else(|| "default".to_string()),
+                                "total_tokens": row.get::<_, Option<i64>>(5).unwrap_or(None).unwrap_or(0),
+                                "execution_time_ms": row.get::<_, Option<i64>>(6).unwrap_or(None).unwrap_or(0),
+                                "created_at": row.get::<_, Option<String>>(7).unwrap_or(None).unwrap_or_default(),
+                                "finished_at": row.get::<_, Option<String>>(8).unwrap_or(None),
+                            });
+                        }
+                    }
+                }
+
+                if let Ok(mut stmt) = conn.prepare("SELECT trace_id, run_id, step_order, step_type, tool_name, payload, timestamp FROM run_traces WHERE run_id = ? ORDER BY step_order ASC") {
+                    let rows = stmt.query_map(rusqlite::params![run_id], |row| {
+                        Ok(serde_json::json!({
+                            "trace_id": row.get::<_, String>(0)?,
+                            "run_id": row.get::<_, String>(1)?,
+                            "step_order": row.get::<_, i64>(2)?,
+                            "step_type": row.get::<_, String>(3)?,
+                            "tool_name": row.get::<_, Option<String>>(4)?,
+                            "payload": row.get::<_, String>(5)?,
+                            "timestamp": row.get::<_, String>(6)?,
+                        }))
+                    });
+                    if let Ok(mapped) = rows {
+                        for t in mapped.flatten() {
+                            traces.push(t);
+                        }
+                    }
+                }
+            }
+
+            let resp = Response::from_string(serde_json::json!({
+                "run": run_val,
+                "traces": traces
+            }).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/telemetry" {
+            let db_candidates = vec![
+                PathBuf::from("data.db"),
+                PathBuf::from("../../data.db"),
+                PathBuf::from("../data.db"),
+            ];
+            let db_path = db_candidates.into_iter().find(|p| p.exists()).unwrap_or_else(|| PathBuf::from("data.db"));
+
+            let mut total_runs = 0;
+            let mut success_runs = 0;
+            let mut total_memories = 0;
+            let mut total_tools = 0;
+
+            if let Ok(conn) = rusqlite::Connection::open(&db_path) {
+                total_runs = conn.query_row("SELECT COUNT(*) FROM runs", [], |r| r.get::<_, i64>(0)).unwrap_or(0);
+                success_runs = conn.query_row("SELECT COUNT(*) FROM runs WHERE status = 'success'", [], |r| r.get::<_, i64>(0)).unwrap_or(0);
+                total_memories = conn.query_row("SELECT COUNT(*) FROM memories", [], |r| r.get::<_, i64>(0)).unwrap_or(0);
+                total_tools = conn.query_row("SELECT COUNT(*) FROM tools WHERE is_enabled = 1", [], |r| r.get::<_, i64>(0)).unwrap_or(0);
+            }
+
+            let resp = Response::from_string(serde_json::json!({
+                "total_runs": total_runs,
+                "success_runs": success_runs,
+                "total_memories": total_memories,
+                "active_tools": total_tools + 6,
+                "backends": []
+            }).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
         // --- GOUVERNANCE PAR INVARIANTS : LISTING DES CONTRATS & INVARIANTS ---
         if path == "/api/ide/invariants" {
             let root_str = query.get("root").map(|s| s.as_str()).unwrap_or(".");
