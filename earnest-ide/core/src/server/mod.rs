@@ -395,8 +395,27 @@ fn handle_request(mut req: tiny_http::Request) {
             let pm = crate::governance::PolicyManager::new(&root_path);
             let policy = pm.load_or_init(None).unwrap_or_default();
 
-            let inv_path = root_path.join(&policy.invariants_file);
-            let lock_path = root_path.join(&policy.lock_file);
+            let inv_candidates = vec![
+                root_path.join(&policy.invariants_file),
+                PathBuf::from(&policy.invariants_file),
+                PathBuf::from(".ide/invariants.json"),
+                PathBuf::from("../../.ide/invariants.json"),
+                PathBuf::from("invariants.json"),
+            ];
+
+            let inv_path = inv_candidates.into_iter().find(|p| p.exists())
+                .unwrap_or_else(|| root_path.join(&policy.invariants_file));
+
+            let lock_candidates = vec![
+                root_path.join(&policy.lock_file),
+                PathBuf::from(&policy.lock_file),
+                PathBuf::from(".ide/invariants.lock"),
+                PathBuf::from("../../.ide/invariants.lock"),
+                PathBuf::from("invariants.lock"),
+            ];
+
+            let lock_path = lock_candidates.into_iter().find(|p| p.exists())
+                .unwrap_or_else(|| root_path.join(&policy.lock_file));
 
             let lock_exists = lock_path.exists();
             let inv_exists = inv_path.exists();
@@ -421,7 +440,24 @@ fn handle_request(mut req: tiny_http::Request) {
                             "criticality": item.criticality,
                             "probes_count": item.probes.len()
                         })).collect::<Vec<_>>()
-                    })).unwrap_or_else(|_| serde_json::json!({"count": 0, "contracts": []}))
+                    })).unwrap_or_else(|_| {
+                        // Fallback si structure standard invariants
+                        let val: Result<Value, _> = serde_json::from_str(&c);
+                        if let Ok(v) = val {
+                            let list = v.get("invariants").and_then(|arr| arr.as_array()).cloned().unwrap_or_default();
+                            serde_json::json!({
+                                "count": list.len(),
+                                "contracts": list.iter().map(|item| serde_json::json!({
+                                    "id": item.get("id").and_then(|s| s.as_str()).unwrap_or(""),
+                                    "target_file": item.get("component").and_then(|s| s.as_str()).unwrap_or(""),
+                                    "criticality": "high",
+                                    "probes_count": 1
+                                })).collect::<Vec<_>>()
+                            })
+                        } else {
+                            serde_json::json!({"count": 0, "contracts": []})
+                        }
+                    })
                 } else {
                     serde_json::json!({"count": 0, "contracts": []})
                 }
@@ -474,10 +510,19 @@ fn handle_request(mut req: tiny_http::Request) {
             let root_path = PathBuf::from(root_str);
             let pm = crate::governance::PolicyManager::new(&root_path);
             let policy = pm.load_or_init(None).unwrap_or_default();
-            let inv_path = root_path.join(&policy.invariants_file);
 
-            let res_json = if inv_path.exists() {
-                if let Ok(c) = fs::read_to_string(&inv_path) {
+            let inv_candidates = vec![
+                root_path.join(&policy.invariants_file),
+                PathBuf::from(&policy.invariants_file),
+                PathBuf::from(".ide/invariants.json"),
+                PathBuf::from("../../.ide/invariants.json"),
+                PathBuf::from("invariants.json"),
+            ];
+
+            let inv_path = inv_candidates.into_iter().find(|p| p.exists());
+
+            let res_json = if let Some(path) = inv_path {
+                if let Ok(c) = fs::read_to_string(&path) {
                     serde_json::from_str::<Value>(&c).unwrap_or_else(|_| serde_json::json!({ "invariants": [], "contracts": [] }))
                 } else {
                     serde_json::json!({ "invariants": [], "contracts": [] })

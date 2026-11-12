@@ -15,7 +15,11 @@
     <link rel="stylesheet" href="css/components.css">
     <script>
         (function () {
-            const isCustomScheme = window.location.protocol === 'tauri:' || window.location.protocol === 'file:' || window.location.hostname === 'tauri.localhost';
+            // Détection Tauri : custom schemes ou dev server intégré (ex: localhost:1430)
+            const isTauriDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const isTauriBuiltin = window.location.port !== '8090';
+            const isCustomScheme = window.location.protocol === 'tauri:' || window.location.protocol === 'file:' || window.location.hostname === 'tauri.localhost' || (isTauriDev && isTauriBuiltin);
+
             window.__EARNEST_IDE_API__ = isCustomScheme ? 'http://127.0.0.1:8090' : window.location.origin;
 
             const origFetch = window.fetch;
