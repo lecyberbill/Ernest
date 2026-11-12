@@ -1,22 +1,25 @@
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Earnest IDE • Professional Agentic Code Studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="css/variables.css">
     <link rel="stylesheet" href="css/layout.css">
     <link rel="stylesheet" href="css/components.css">
     <script>
-        (function() {
+        (function () {
             const isCustomScheme = window.location.protocol === 'tauri:' || window.location.protocol === 'file:' || window.location.hostname === 'tauri.localhost';
             window.__EARNEST_IDE_API__ = isCustomScheme ? 'http://127.0.0.1:8090' : window.location.origin;
 
             const origFetch = window.fetch;
-            window.fetch = function(resource, init) {
+            window.fetch = function (resource, init) {
                 if (typeof resource === 'string' && resource.startsWith('/api/')) {
                     resource = window.__EARNEST_IDE_API__ + resource;
                 } else if (resource instanceof Request && resource.url.startsWith('/api/')) {
@@ -30,7 +33,8 @@
     <script src="js/vendor/monaco/vs/loader.js"></script>
 
     <style>
-        body, html {
+        body,
+        html {
             margin: 0;
             padding: 0;
             height: 100%;
@@ -39,12 +43,14 @@
             color: var(--text-primary);
             font-family: var(--font-sans);
         }
+
         .ide-container {
             display: grid;
             grid-template-rows: 46px 1fr 28px;
             height: 100vh;
             width: 100vw;
         }
+
         .ide-top-bar {
             display: flex;
             align-items: center;
@@ -63,6 +69,7 @@
             overflow: hidden;
             height: 100%;
         }
+
         .activity-bar {
             background: #0d1117;
             border-right: 1px solid var(--border-subtle);
@@ -73,6 +80,7 @@
             gap: 0.5rem;
             z-index: 10;
         }
+
         .activity-btn {
             width: 36px;
             height: 36px;
@@ -87,14 +95,17 @@
             transition: all 0.15s ease;
             position: relative;
         }
+
         .activity-btn:hover {
             color: var(--text-primary);
             background: rgba(255, 255, 255, 0.06);
         }
+
         .activity-btn.active {
             color: var(--accent-cyan);
             background: rgba(99, 102, 241, 0.15);
         }
+
         .activity-btn.active::before {
             content: '';
             position: absolute;
@@ -121,7 +132,9 @@
             transition: background 0.2s ease;
             z-index: 10;
         }
-        .resizer-v:hover, .resizer-v.dragging {
+
+        .resizer-v:hover,
+        .resizer-v.dragging {
             background: var(--accent-cyan);
             box-shadow: 0 0 8px var(--accent-cyan);
         }
@@ -134,12 +147,14 @@
             flex-direction: column;
             overflow: hidden;
         }
+
         .sidebar-view {
             display: none;
             flex-direction: column;
             height: 100%;
             overflow: hidden;
         }
+
         .sidebar-view.active {
             display: flex;
         }
@@ -156,6 +171,7 @@
             justify-content: space-between;
             align-items: center;
         }
+
         .icon-btn {
             background: none;
             border: none;
@@ -168,10 +184,12 @@
             justify-content: center;
             transition: all 0.15s ease;
         }
+
         .icon-btn:hover {
             color: var(--text-primary);
             background: rgba(255, 255, 255, 0.08);
         }
+
         .sidebar-body {
             flex: 1;
             overflow-y: auto;
@@ -193,15 +211,18 @@
             position: relative;
             user-select: none;
         }
+
         .tree-node-row:hover {
             background: rgba(255, 255, 255, 0.05);
             color: var(--text-primary);
         }
+
         .tree-node-row.selected {
             background: rgba(99, 102, 241, 0.18);
             color: var(--accent-cyan);
             font-weight: 600;
         }
+
         .tree-arrow {
             display: inline-flex;
             align-items: center;
@@ -213,17 +234,21 @@
             transition: transform 0.15s ease;
             flex-shrink: 0;
         }
+
         .tree-arrow.expanded {
             transform: rotate(90deg);
         }
+
         .tree-arrow.spacer {
             visibility: hidden;
         }
+
         .tree-icon {
             display: inline-flex;
             margin-right: 0.4rem;
             flex-shrink: 0;
         }
+
         .tree-item-actions {
             display: none;
             position: absolute;
@@ -233,6 +258,7 @@
             padding: 2px 4px;
             border-radius: 4px;
         }
+
         .tree-node-row:hover .tree-item-actions {
             display: flex;
         }
@@ -245,6 +271,7 @@
             overflow: hidden;
             position: relative;
         }
+
         .ide-center-pane.bottom-panel-closed {
             grid-template-rows: 1fr 0px;
         }
@@ -256,6 +283,7 @@
             position: relative;
             background: #1e1e1e;
         }
+
         .editor-top-controls {
             display: flex;
             background: var(--surface-dim);
@@ -264,11 +292,13 @@
             align-items: stretch;
             justify-content: space-between;
         }
+
         .editor-tabs {
             display: flex;
             overflow-x: auto;
             flex: 1;
         }
+
         .editor-tab {
             display: inline-flex;
             align-items: center;
@@ -283,12 +313,14 @@
             user-select: none;
             white-space: nowrap;
         }
+
         .editor-tab.active {
             background: #1e1e1e;
             color: var(--text-primary);
             font-weight: 600;
             border-top: 2px solid var(--primary);
         }
+
         .editor-tab-close {
             display: inline-flex;
             align-items: center;
@@ -300,10 +332,12 @@
             color: var(--text-muted);
             transition: all 0.15s ease;
         }
+
         .editor-tab-close:hover {
             background: rgba(239, 68, 68, 0.25);
             color: #ef4444;
         }
+
         .editor-tab.modified .editor-tab-close::before {
             content: '●';
             color: var(--accent-amber);
@@ -323,14 +357,17 @@
             width: 480px;
             max-width: 90%;
         }
+
         .inline-ai-widget.visible {
             display: block;
         }
+
         .inline-ai-input-row {
             display: flex;
             align-items: center;
             gap: 6px;
         }
+
         .inline-ai-input {
             flex: 1;
             background: #0f141f;
@@ -342,6 +379,7 @@
             border-radius: 4px;
             outline: none;
         }
+
         .inline-ai-btn {
             background: var(--primary);
             color: #fff;
@@ -360,6 +398,7 @@
             position: relative;
             overflow: hidden;
         }
+
         #monaco-diff-container {
             display: none;
             flex: 1;
@@ -377,6 +416,7 @@
             border-top: 1px solid var(--border-subtle);
             overflow: hidden;
         }
+
         .bottom-panel-header {
             height: 32px;
             display: flex;
@@ -388,11 +428,13 @@
             font-family: var(--font-mono);
             font-size: 0.74rem;
         }
+
         .bottom-panel-tabs {
             display: flex;
             align-items: center;
             gap: 0.75rem;
         }
+
         .bottom-tab-btn {
             background: none;
             border: none;
@@ -406,15 +448,18 @@
             align-items: center;
             gap: 4px;
         }
+
         .bottom-tab-btn.active {
             color: var(--accent-cyan);
             border-bottom: 2px solid var(--accent-cyan);
         }
+
         .bottom-content-pane {
             flex: 1;
             overflow: hidden;
             display: none;
         }
+
         .bottom-content-pane.active {
             display: flex;
             flex-direction: column;
@@ -430,6 +475,7 @@
             white-space: pre-wrap;
             line-height: 1.45;
         }
+
         .terminal-input-bar {
             display: flex;
             align-items: center;
@@ -439,12 +485,14 @@
             font-family: var(--font-mono);
             gap: 0.5rem;
         }
+
         .terminal-prompt-sym {
             color: var(--accent-emerald);
             font-weight: 700;
             font-size: 0.82rem;
             user-select: none;
         }
+
         #terminal-input {
             flex: 1;
             background: transparent;
@@ -463,6 +511,7 @@
             flex-direction: column;
             overflow: hidden;
         }
+
         .agent-header {
             padding: 0.75rem 1rem;
             border-bottom: 1px solid var(--border-subtle);
@@ -470,6 +519,7 @@
             justify-content: space-between;
             align-items: center;
         }
+
         .agent-stream {
             flex: 1;
             overflow-y: auto;
@@ -478,6 +528,7 @@
             flex-direction: column;
             gap: 0.75rem;
         }
+
         .agent-input-box {
             padding: 0.75rem 1rem;
             border-top: 1px solid var(--border-subtle);
@@ -501,13 +552,16 @@
             flex-direction: column;
             overflow: hidden;
         }
+
         .palette-overlay.open {
             display: flex;
         }
+
         .palette-input-box {
             padding: 0.75rem 1rem;
             border-bottom: 1px solid var(--border-subtle);
         }
+
         .palette-input {
             width: 100%;
             background: transparent;
@@ -517,6 +571,7 @@
             font-family: var(--font-mono);
             font-size: 0.9rem;
         }
+
         .palette-list {
             max-height: 320px;
             overflow-y: auto;
@@ -524,6 +579,7 @@
             font-family: var(--font-mono);
             font-size: 0.78rem;
         }
+
         .palette-item {
             padding: 0.45rem 0.75rem;
             border-radius: 4px;
@@ -533,7 +589,9 @@
             justify-content: space-between;
             color: var(--text-secondary);
         }
-        .palette-item:hover, .palette-item.active {
+
+        .palette-item:hover,
+        .palette-item.active {
             background: rgba(99, 102, 241, 0.2);
             color: var(--accent-cyan);
         }
@@ -557,6 +615,7 @@
             position: relative;
             display: inline-block;
         }
+
         .menu-bar-btn {
             background: transparent;
             border: none;
@@ -569,10 +628,13 @@
             cursor: pointer;
             transition: background 0.15s ease, color 0.15s ease;
         }
-        .menu-bar-btn:hover, .menu-bar-btn.active {
+
+        .menu-bar-btn:hover,
+        .menu-bar-btn.active {
             background: rgba(255, 255, 255, 0.08);
             color: var(--text-primary);
         }
+
         .menu-dropdown-content {
             display: none;
             position: absolute;
@@ -587,9 +649,11 @@
             padding: 4px 0;
             margin-top: 4px;
         }
+
         .menu-dropdown-content.show {
             display: block;
         }
+
         .menu-item {
             display: flex;
             align-items: center;
@@ -601,16 +665,19 @@
             cursor: pointer;
             transition: background 0.12s ease, color 0.12s ease;
         }
+
         .menu-item:hover {
             background: rgba(99, 102, 241, 0.2);
             color: #fff;
         }
+
         .menu-item-shortcut {
             font-family: var(--font-mono);
             font-size: 0.68rem;
             color: var(--text-muted);
             margin-left: 12px;
         }
+
         .menu-separator {
             height: 1px;
             background: var(--border-subtle);
@@ -618,13 +685,16 @@
         }
     </style>
 </head>
+
 <body>
     <div class="ide-container">
         <!-- Barre de titre & Navigation Principale -->
         <header class="ide-top-bar">
             <div style="display: flex; align-items: center; gap: 0.85rem;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 800; color: #fff; font-family: var(--font-mono);">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <div
+                    style="display: flex; align-items: center; gap: 0.5rem; font-weight: 800; color: #fff; font-family: var(--font-mono);">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="16 18 22 12 16 6"></polyline>
                         <polyline points="8 6 2 12 8 18"></polyline>
                     </svg>
@@ -735,19 +805,29 @@
                 <span style="color: var(--text-muted);">|</span>
 
                 <!-- Sélecteur & Gestionnaire de Projet -->
-                <button id="btn-project-manager" class="icon-btn" style="border: 1px solid var(--border-subtle); padding: 3px 10px; border-radius: 4px; gap: 0.4rem; font-size: 0.75rem; color: var(--accent-cyan);" title="Gérer ou changer de projet">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                <button id="btn-project-manager" class="icon-btn"
+                    style="border: 1px solid var(--border-subtle); padding: 3px 10px; border-radius: 4px; gap: 0.4rem; font-size: 0.75rem; color: var(--accent-cyan);"
+                    title="Gérer ou changer de projet">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
                     <span id="top-project-name">Projet : Earnest</span>
                     <span style="font-size: 0.65rem;">▼</span>
                 </button>
 
                 <!-- Badge Mode Gouvernance par Invariants -->
-                <div id="governance-badge" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 2px 8px; border-radius: 12px; font-size: 0.68rem; font-family: var(--font-mono); border: 1px solid var(--border-subtle); background: rgba(30, 41, 59, 0.6); color: var(--text-muted); cursor: pointer;" title="Statut de gouvernance d'agent">
-                    <span id="gov-indicator" style="width: 7px; height: 7px; border-radius: 50%; background: #94a3b8;"></span>
+                <div id="governance-badge"
+                    style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 2px 8px; border-radius: 12px; font-size: 0.68rem; font-family: var(--font-mono); border: 1px solid var(--border-subtle); background: rgba(30, 41, 59, 0.6); color: var(--text-muted); cursor: pointer;"
+                    title="Statut de gouvernance d'agent">
+                    <span id="gov-indicator"
+                        style="width: 7px; height: 7px; border-radius: 50%; background: #94a3b8;"></span>
                     <span id="gov-mode-text">Mode 1: Normal</span>
                 </div>
-                <button id="btn-quick-open-top" class="icon-btn" style="border: 1px solid var(--border-subtle); padding: 3px 10px; border-radius: 4px; gap: 0.4rem; font-size: 0.75rem;" title="Rechercher un fichier (Ctrl+P)">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <button id="btn-quick-open-top" class="icon-btn"
+                    style="border: 1px solid var(--border-subtle); padding: 3px 10px; border-radius: 4px; gap: 0.4rem; font-size: 0.75rem;"
+                    title="Rechercher un fichier (Ctrl+P)">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="11" cy="11" r="8"></circle>
                         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                     </svg>
@@ -757,26 +837,41 @@
 
             <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <!-- Volet Toggles (Sidebar & Agent) -->
-                <button id="btn-toggle-sidebar" class="icon-btn" style="border: 1px solid var(--border-subtle); padding: 3px 8px; border-radius: 4px; gap: 0.3rem;" title="Afficher/Masquer le panneau latéral gauche (Ctrl+B)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
+                <button id="btn-toggle-sidebar" class="icon-btn"
+                    style="border: 1px solid var(--border-subtle); padding: 3px 8px; border-radius: 4px; gap: 0.3rem;"
+                    title="Afficher/Masquer le panneau latéral gauche (Ctrl+B)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="9" y1="3" x2="9" y2="21"></line>
+                    </svg>
                     <span>Volet Gauche</span>
                 </button>
 
-                <button id="btn-toggle-agent" class="icon-btn" style="border: 1px solid var(--border-subtle); padding: 3px 8px; border-radius: 4px; gap: 0.3rem;" title="Afficher/Masquer l'Assistant Pair Programmer (Ctrl+J)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="15" y1="3" x2="15" y2="21"></line></svg>
+                <button id="btn-toggle-agent" class="icon-btn"
+                    style="border: 1px solid var(--border-subtle); padding: 3px 8px; border-radius: 4px; gap: 0.3rem;"
+                    title="Afficher/Masquer l'Assistant Pair Programmer (Ctrl+J)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="15" y1="3" x2="15" y2="21"></line>
+                    </svg>
                     <span>Assistant IA</span>
                 </button>
 
-                <button id="btn-toggle-bottom" class="icon-btn" style="border: 1px solid var(--border-subtle); padding: 3px 8px; border-radius: 4px; gap: 0.3rem;" title="Afficher/Masquer le panneau inférieur (Terminal / Diagnostics)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <button id="btn-toggle-bottom" class="icon-btn"
+                    style="border: 1px solid var(--border-subtle); padding: 3px 8px; border-radius: 4px; gap: 0.3rem;"
+                    title="Afficher/Masquer le panneau inférieur (Terminal / Diagnostics)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="4 17 10 11 4 5"></polyline>
                         <line x1="12" y1="19" x2="20" y2="19"></line>
                     </svg>
                     <span>Console</span>
                 </button>
 
-                <button id="btn-save-file" class="btn-primary" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.4rem;">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <button id="btn-save-file" class="btn-primary"
+                    style="padding: 0.25rem 0.75rem; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.4rem;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
                         <polyline points="17 21 17 13 7 13 7 21"></polyline>
                         <polyline points="7 3 7 8 15 8"></polyline>
@@ -784,10 +879,15 @@
                     Sauvegarder (Ctrl+S)
                 </button>
 
-                <button id="btn-open-settings" class="icon-btn" style="border: 1px solid var(--border-subtle); padding: 4px 8px; border-radius: 4px; gap: 0.4rem;" title="Préférences de l'application">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <button id="btn-open-settings" class="icon-btn"
+                    style="border: 1px solid var(--border-subtle); padding: 4px 8px; border-radius: 4px; gap: 0.4rem;"
+                    title="Préférences de l'application">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"></circle>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                        </path>
                     </svg>
                     <span>Préférences</span>
                 </button>
@@ -798,19 +898,22 @@
         <div class="ide-body-wrap">
             <nav class="activity-bar">
                 <button class="activity-btn active" id="act-btn-explorer" title="Explorateur de Fichiers">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                         <polyline points="14 2 14 8 20 8"></polyline>
                     </svg>
                 </button>
                 <button class="activity-btn" id="act-btn-search" title="Recherche Globale (Ctrl+Shift+F)">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="11" cy="11" r="8"></circle>
                         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                     </svg>
                 </button>
                 <button class="activity-btn" id="act-btn-git" title="Gestion de Version Git">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="18" cy="18" r="3"></circle>
                         <circle cx="6" cy="6" r="3"></circle>
                         <path d="M6 9v12"></path>
@@ -818,8 +921,11 @@
                     </svg>
                 </button>
                 <button class="activity-btn" id="act-btn-diagnostics" title="Diagnostics & Linter">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path
+                            d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
+                        </path>
                         <line x1="12" y1="9" x2="12" y2="13"></line>
                         <line x1="12" y1="17" x2="12.01" y2="17"></line>
                     </svg>
@@ -829,9 +935,12 @@
                 </button>
                 <div style="flex: 1;"></div>
                 <button class="activity-btn" id="act-btn-settings" title="Préférences Générales">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"></circle>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                        </path>
                     </svg>
                 </button>
             </nav>
@@ -845,10 +954,18 @@
                             <span>EXPLORATEUR</span>
                             <div style="display: flex; gap: 4px;">
                                 <button class="icon-btn" id="btn-new-file" title="Nouveau Fichier">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <line x1="12" y1="18" x2="12" y2="12"></line>
+                                        <line x1="9" y1="15" x2="15" y2="15"></line>
+                                    </svg>
                                 </button>
                                 <button class="icon-btn" id="btn-refresh-tree" title="Actualiser">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                                    </svg>
                                 </button>
                             </div>
                         </div>
@@ -859,10 +976,13 @@
                     <div class="sidebar-view" id="view-search">
                         <div class="tree-header"><span>RECHERCHE GLOBALE</span></div>
                         <div style="padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--border-subtle);">
-                            <input type="text" id="global-search-input" placeholder="Rechercher dans tout le projet..." style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 5px 8px; font-family: var(--font-mono); font-size: 0.78rem; border-radius: 4px;" />
+                            <input type="text" id="global-search-input" placeholder="Rechercher dans tout le projet..."
+                                style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 5px 8px; font-family: var(--font-mono); font-size: 0.78rem; border-radius: 4px;" />
                         </div>
                         <div class="sidebar-body" id="search-results-list" style="padding: 0.5rem;">
-                            <div style="color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 1rem;">Tapez une requête pour chercher dans le projet</div>
+                            <div
+                                style="color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 1rem;">
+                                Tapez une requête pour chercher dans le projet</div>
                         </div>
                     </div>
 
@@ -870,11 +990,15 @@
                     <div class="sidebar-view" id="view-git">
                         <div class="tree-header">
                             <span>GIT SOURCE CONTROL</span>
-                            <span id="git-branch-badge" style="color: var(--accent-cyan); font-size: 0.72rem; text-transform: none;">master</span>
+                            <span id="git-branch-badge"
+                                style="color: var(--accent-cyan); font-size: 0.72rem; text-transform: none;">master</span>
                         </div>
-                        <div style="padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 0.5rem;">
-                            <input type="text" id="git-commit-msg" placeholder="Message de commit..." style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 5px 8px; font-family: var(--font-mono); font-size: 0.78rem; border-radius: 4px;" />
-                            <button id="btn-git-commit" class="btn-primary" style="padding: 4px 8px; font-size: 0.75rem;">Commit Tout (Staged + Modified)</button>
+                        <div
+                            style="padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 0.5rem;">
+                            <input type="text" id="git-commit-msg" placeholder="Message de commit..."
+                                style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 5px 8px; font-family: var(--font-mono); font-size: 0.78rem; border-radius: 4px;" />
+                            <button id="btn-git-commit" class="btn-primary"
+                                style="padding: 4px 8px; font-size: 0.75rem;">Commit Tout (Staged + Modified)</button>
                         </div>
                         <div class="sidebar-body" id="git-files-list" style="padding: 0.4rem;"></div>
                     </div>
@@ -884,11 +1008,16 @@
                         <div class="tree-header">
                             <span>DIAGNOSTICS & ERREURS</span>
                             <button class="icon-btn" id="btn-refresh-diagnostics" title="Relancer l'analyse">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                                </svg>
                             </button>
                         </div>
                         <div class="sidebar-body" id="diagnostics-list" style="padding: 0.4rem;">
-                            <div style="color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 1rem;">Aucune erreur détectée</div>
+                            <div
+                                style="color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 1rem;">
+                                Aucune erreur détectée</div>
                         </div>
                     </div>
 
@@ -902,78 +1031,121 @@
                         <div class="tree-header">
                             <span>CONFIGURATION & MODÈLES IA</span>
                         </div>
-                        <div class="sidebar-body" style="padding: 0.85rem; display: flex; flex-direction: column; gap: 1rem; font-family: var(--font-mono); font-size: 0.76rem; overflow-y: auto;">
+                        <div class="sidebar-body"
+                            style="padding: 0.85rem; display: flex; flex-direction: column; gap: 1rem; font-family: var(--font-mono); font-size: 0.76rem; overflow-y: auto;">
                             <!-- Section Modèle Actif -->
-                            <div style="background: rgba(15, 23, 42, 0.6); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-subtle);">
-                                <label style="display: block; color: var(--accent-cyan); margin-bottom: 0.4rem; font-weight: 700;">MODÈLE PAR DÉFAUT (ACTIF)</label>
-                                <select id="pref-default-model" style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 6px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.75rem;"></select>
+                            <div
+                                style="background: rgba(15, 23, 42, 0.6); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-subtle);">
+                                <label
+                                    style="display: block; color: var(--accent-cyan); margin-bottom: 0.4rem; font-weight: 700;">MODÈLE
+                                    PAR DÉFAUT (ACTIF)</label>
+                                <select id="pref-default-model"
+                                    style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 6px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.75rem;"></select>
                             </div>
 
                             <!-- Section Liste des Fournisseurs / Modèles -->
-                            <div style="background: rgba(15, 23, 42, 0.6); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-subtle);">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                    <label style="color: var(--text-primary); font-weight: 700;">FOURNISSEURS CONFIGURÉS</label>
-                                    <button id="btn-toggle-add-model" class="icon-btn" style="border: 1px solid var(--accent-cyan); color: var(--accent-cyan); padding: 2px 6px; font-size: 0.7rem;">+ Nouveau</button>
+                            <div
+                                style="background: rgba(15, 23, 42, 0.6); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-subtle);">
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <label style="color: var(--text-primary); font-weight: 700;">FOURNISSEURS
+                                        CONFIGURÉS</label>
+                                    <button id="btn-toggle-add-model" class="icon-btn"
+                                        style="border: 1px solid var(--accent-cyan); color: var(--accent-cyan); padding: 2px 6px; font-size: 0.7rem;">+
+                                        Nouveau</button>
                                 </div>
-                                <div id="models-cards-list" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
+                                <div id="models-cards-list" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                </div>
 
                                 <!-- Formulaire Ajout / Édition d'un Fournisseur -->
-                                <div id="model-form-pane" style="display: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed var(--border-subtle); flex-direction: column; gap: 0.45rem;">
+                                <div id="model-form-pane"
+                                    style="display: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed var(--border-subtle); flex-direction: column; gap: 0.45rem;">
                                     <input type="hidden" id="model-form-id" />
                                     <div>
-                                        <label style="color: var(--text-muted); font-size: 0.7rem;">Nom convivial</label>
-                                        <input type="text" id="model-form-name" placeholder="ex: Mon Serveur Local" style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
+                                        <label style="color: var(--text-muted); font-size: 0.7rem;">Nom
+                                            convivial</label>
+                                        <input type="text" id="model-form-name" placeholder="ex: Mon Serveur Local"
+                                            style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
                                     </div>
                                     <div>
-                                        <label style="color: var(--text-muted); font-size: 0.7rem;">Type de protocole</label>
-                                        <select id="model-form-type" style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;">
-                                            <option value="openai">OpenAI Compatible (LM Studio, vLLM, DeepSeek, OpenAI...)</option>
+                                        <label style="color: var(--text-muted); font-size: 0.7rem;">Type de
+                                            protocole</label>
+                                        <select id="model-form-type"
+                                            style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;">
+                                            <option value="openai">OpenAI Compatible (LM Studio, vLLM, DeepSeek,
+                                                OpenAI...)</option>
                                             <option value="ollama">Ollama Native API (/api/generate)</option>
                                         </select>
                                     </div>
                                     <div>
-                                        <label style="color: var(--text-muted); font-size: 0.7rem;">URL Endpoint (Base URL)</label>
-                                        <input type="text" id="model-form-url" placeholder="http://127.0.0.1:1234 ou https://api.deepseek.com" style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
+                                        <label style="color: var(--text-muted); font-size: 0.7rem;">URL Endpoint (Base
+                                            URL)</label>
+                                        <input type="text" id="model-form-url"
+                                            placeholder="http://127.0.0.1:1234 ou https://api.deepseek.com"
+                                            style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
                                     </div>
                                     <div>
-                                        <label style="color: var(--text-muted); font-size: 0.7rem;">Identifiant Modèle</label>
-                                        <input type="text" id="model-form-model" placeholder="ex: deepseek-chat, qwen2.5-coder:7b" style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
+                                        <label style="color: var(--text-muted); font-size: 0.7rem;">Identifiant
+                                            Modèle</label>
+                                        <input type="text" id="model-form-model"
+                                            placeholder="ex: deepseek-chat, qwen2.5-coder:7b"
+                                            style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
                                     </div>
                                     <div>
-                                        <label style="color: var(--text-muted); font-size: 0.7rem;">Clé API (Token / Secret)</label>
-                                        <input type="password" id="model-form-key" placeholder="Optionnel (laisser vide si local)" style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
+                                        <label style="color: var(--text-muted); font-size: 0.7rem;">Clé API (Token /
+                                            Secret)</label>
+                                        <input type="password" id="model-form-key"
+                                            placeholder="Optionnel (laisser vide si local)"
+                                            style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
                                     </div>
                                     <div style="display: flex; gap: 0.5rem; margin-top: 0.4rem;">
-                                        <button id="btn-save-model-item" class="btn-primary" style="flex: 1; padding: 4px; font-size: 0.72rem;">Sauvegarder Modèle</button>
-                                        <button id="btn-cancel-model-item" class="icon-btn" style="border: 1px solid var(--border-subtle); padding: 4px 8px; font-size: 0.72rem;">Annuler</button>
+                                        <button id="btn-save-model-item" class="btn-primary"
+                                            style="flex: 1; padding: 4px; font-size: 0.72rem;">Sauvegarder
+                                            Modèle</button>
+                                        <button id="btn-cancel-model-item" class="icon-btn"
+                                            style="border: 1px solid var(--border-subtle); padding: 4px 8px; font-size: 0.72rem;">Annuler</button>
                                     </div>
                                 </div>
                             </div>
 
                             <!-- Section Interpréteur & Éditeur -->
-                            <div style="background: rgba(15, 23, 42, 0.6); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 0.6rem;">
-                                <label style="color: var(--text-primary); font-weight: 700;">ENVIRONNEMENT D'EXÉCUTION</label>
+                            <div
+                                style="background: rgba(15, 23, 42, 0.6); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 0.6rem;">
+                                <label style="color: var(--text-primary); font-weight: 700;">ENVIRONNEMENT
+                                    D'EXÉCUTION</label>
                                 <div>
-                                    <label style="display: block; color: var(--text-secondary); margin-bottom: 0.25rem;">Interpréteur Python</label>
-                                    <input type="text" id="pref-python-path" placeholder="ex: python, D:\anaconda\python.exe" style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.75rem;" />
+                                    <label
+                                        style="display: block; color: var(--text-secondary); margin-bottom: 0.25rem;">Interpréteur
+                                        Python</label>
+                                    <input type="text" id="pref-python-path"
+                                        placeholder="ex: python, D:\anaconda\python.exe"
+                                        style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.75rem;" />
                                 </div>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
                                     <div>
-                                        <label style="display: block; color: var(--text-secondary); margin-bottom: 0.25rem;">Police Monaco</label>
-                                        <input type="number" id="pref-editor-fontsize" value="13" min="10" max="28" style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.75rem;" />
+                                        <label
+                                            style="display: block; color: var(--text-secondary); margin-bottom: 0.25rem;">Police
+                                            Monaco</label>
+                                        <input type="number" id="pref-editor-fontsize" value="13" min="10" max="28"
+                                            style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.75rem;" />
                                     </div>
                                     <div>
-                                        <label style="display: block; color: var(--text-secondary); margin-bottom: 0.25rem;">Indentation</label>
-                                        <select id="pref-editor-tabsize" style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.75rem;">
+                                        <label
+                                            style="display: block; color: var(--text-secondary); margin-bottom: 0.25rem;">Indentation</label>
+                                        <select id="pref-editor-tabsize"
+                                            style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.75rem;">
                                             <option value="4">4 espaces</option>
                                             <option value="2">2 espaces</option>
                                         </select>
                                     </div>
                                 </div>
-                                <button id="btn-save-preferences" class="btn-primary" style="padding: 0.45rem; font-size: 0.75rem; margin-top: 0.25rem;">
+                                <button id="btn-save-preferences" class="btn-primary"
+                                    style="padding: 0.45rem; font-size: 0.75rem; margin-top: 0.25rem;">
                                     Appliquer les réglages
                                 </button>
-                                <span id="pref-status-msg" style="color: var(--accent-emerald); font-size: 0.7rem; text-align: center; display: none;">Préférences enregistrées ✓</span>
+                                <span id="pref-status-msg"
+                                    style="color: var(--accent-emerald); font-size: 0.7rem; text-align: center; display: none;">Préférences
+                                    enregistrées ✓</span>
                             </div>
                         </div>
                     </div>
@@ -987,54 +1159,85 @@
                         <div class="editor-top-controls">
                             <div class="editor-tabs" id="editor-tabs"></div>
                             <div class="editor-mode-toggle">
-                                <button class="icon-btn" id="btn-open-kb-tab" title="Ouvrir la Base d'Expérience (BCPE)" style="font-size: 0.74rem; font-family: var(--font-mono); color: #fb7185; gap: 4px; border: 1px solid rgba(244, 63, 94, 0.3); padding: 2px 8px; border-radius: 4px; background: rgba(244, 63, 94, 0.1);">
+                                <button class="icon-btn" id="btn-open-kb-tab" title="Ouvrir la Base d'Expérience (BCPE)"
+                                    style="font-size: 0.74rem; font-family: var(--font-mono); color: #fb7185; gap: 4px; border: 1px solid rgba(244, 63, 94, 0.3); padding: 2px 8px; border-radius: 4px; background: rgba(244, 63, 94, 0.1);">
                                     <span>🧠 Base d'Expérience</span>
                                 </button>
-                                <button class="icon-btn" id="btn-trigger-inline-ai" title="Inline AI Edit (Ctrl+K)" style="font-size: 0.74rem; font-family: var(--font-mono); color: var(--accent-cyan); gap: 4px;">
+                                <button class="icon-btn" id="btn-trigger-inline-ai" title="Inline AI Edit (Ctrl+K)"
+                                    style="font-size: 0.74rem; font-family: var(--font-mono); color: var(--accent-cyan); gap: 4px;">
                                     <span>⚡ Edit IA (Ctrl+K)</span>
                                 </button>
-                                <button class="icon-btn" id="btn-toggle-diff" title="Basculer Diff Editor" style="font-size: 0.74rem; font-family: var(--font-mono); gap: 4px;">
+                                <button class="icon-btn" id="btn-toggle-diff" title="Basculer Diff Editor"
+                                    style="font-size: 0.74rem; font-family: var(--font-mono); gap: 4px;">
                                     <span>Diff</span>
                                 </button>
                             </div>
                         </div>
 
                         <!-- Vue KB Plein Écran (dans l'éditeur central) -->
-                        <div id="central-kb-view" style="display: none; height: 100%; width: 100%; overflow: hidden; background: #0f172a;"></div>
+                        <div id="central-kb-view"
+                            style="display: none; height: 100%; width: 100%; overflow: hidden; background: #0f172a;">
+                        </div>
 
                         <!-- Vue Cockpit Invariants Plein Écran (dans l'éditeur central) -->
-                        <div id="central-gov-view" style="display: none; height: 100%; width: 100%; overflow-y: auto; background: #0c1017; padding: 1.5rem; box-sizing: border-box; font-family: var(--font-sans);">
-                            <div style="max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-subtle); padding-bottom: 1rem;">
+                        <div id="central-gov-view"
+                            style="display: none; height: 100%; width: 100%; overflow-y: auto; background: #0c1017; padding: 1.5rem; box-sizing: border-box; font-family: var(--font-sans);">
+                            <div
+                                style="max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem;">
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-subtle); padding-bottom: 1rem;">
                                     <div>
-                                        <h2 style="font-size: 1.25rem; font-weight: 700; color: #fff; margin: 0 0 0.25rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                                        <h2
+                                            style="font-size: 1.25rem; font-weight: 700; color: #fff; margin: 0 0 0.25rem 0; display: flex; align-items: center; gap: 0.5rem;">
                                             <span>🛡️ Cockpit de Gouvernance & Invariants d'Intégrité</span>
                                         </h2>
-                                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">Supervision du runtime, validation des contrats et exécution Sandbox Shadow</p>
+                                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">
+                                            Supervision du runtime, validation des contrats et exécution Sandbox Shadow
+                                        </p>
                                     </div>
-                                    <button class="btn-primary" id="btn-central-run-invariants" style="padding: 0.45rem 1rem; font-size: 0.78rem;">
+                                    <button class="btn-primary" id="btn-central-run-invariants"
+                                        style="padding: 0.45rem 1rem; font-size: 0.78rem;">
                                         ⚡ Revalider les Invariants
                                     </button>
                                 </div>
 
                                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
-                                    <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 1rem;">
-                                        <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Statut Verrou SHA-256</div>
-                                        <div id="central-gov-lock-status" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-emerald); margin-top: 0.35rem;">VERROUILLÉ ✓</div>
+                                    <div
+                                        style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 1rem;">
+                                        <div
+                                            style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">
+                                            Statut Verrou SHA-256</div>
+                                        <div id="central-gov-lock-status"
+                                            style="font-size: 1.1rem; font-weight: 700; color: var(--accent-emerald); margin-top: 0.35rem;">
+                                            VERROUILLÉ ✓</div>
                                     </div>
-                                    <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 1rem;">
-                                        <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Mode Actif de l'Agent</div>
-                                        <div id="central-gov-mode-display" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); margin-top: 0.35rem;">Mode 1: Normal</div>
+                                    <div
+                                        style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 1rem;">
+                                        <div
+                                            style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">
+                                            Mode Actif de l'Agent</div>
+                                        <div id="central-gov-mode-display"
+                                            style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); margin-top: 0.35rem;">
+                                            Mode 1: Normal</div>
                                     </div>
-                                    <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 1rem;">
-                                        <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Contrats Spécifiés</div>
-                                        <div id="central-gov-contracts-count" style="font-size: 1.1rem; font-weight: 700; color: #fff; margin-top: 0.35rem;">10 Invariants</div>
+                                    <div
+                                        style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 1rem;">
+                                        <div
+                                            style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">
+                                            Contrats Spécifiés</div>
+                                        <div id="central-gov-contracts-count"
+                                            style="font-size: 1.1rem; font-weight: 700; color: #fff; margin-top: 0.35rem;">
+                                            10 Invariants</div>
                                     </div>
                                 </div>
 
-                                <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 1.25rem;">
-                                    <h3 style="font-size: 0.95rem; font-weight: 600; color: #fff; margin: 0 0 0.85rem 0;">Liste des Invariants & Sondes d'Exécution</h3>
-                                    <div id="central-gov-invariants-list" style="display: flex; flex-direction: column; gap: 0.65rem; font-family: var(--font-mono); font-size: 0.78rem;">
+                                <div
+                                    style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 1.25rem;">
+                                    <h3
+                                        style="font-size: 0.95rem; font-weight: 600; color: #fff; margin: 0 0 0.85rem 0;">
+                                        Liste des Invariants & Sondes d'Exécution</h3>
+                                    <div id="central-gov-invariants-list"
+                                        style="display: flex; flex-direction: column; gap: 0.65rem; font-family: var(--font-mono); font-size: 0.78rem;">
                                         <!-- Dynamique -->
                                     </div>
                                 </div>
@@ -1044,7 +1247,8 @@
                         <!-- Widget Flottant Inline AI (Ctrl+K) -->
                         <div class="inline-ai-widget" id="inline-ai-widget">
                             <div class="inline-ai-input-row">
-                                <input type="text" id="inline-ai-input" class="inline-ai-input" placeholder="Instruction de modification (ex: 'Rends cette fonction asynchrone', 'Optimise')" />
+                                <input type="text" id="inline-ai-input" class="inline-ai-input"
+                                    placeholder="Instruction de modification (ex: 'Rends cette fonction asynchrone', 'Optimise')" />
                                 <button id="btn-inline-ai-submit" class="inline-ai-btn">Générer</button>
                                 <button class="icon-btn" id="btn-inline-ai-cancel">✕</button>
                             </div>
@@ -1063,34 +1267,41 @@
                                 <button class="bottom-tab-btn" id="btn-tab-problems">Problèmes & Linter</button>
                             </div>
                             <div style="display: flex; gap: 4px;">
-                                <button class="icon-btn" id="btn-clear-terminal" style="font-size: 0.7rem;">Effacer</button>
+                                <button class="icon-btn" id="btn-clear-terminal"
+                                    style="font-size: 0.7rem;">Effacer</button>
                                 <button class="icon-btn" id="btn-close-bottom">✕</button>
                             </div>
                         </div>
 
                         <!-- Onglet Terminal 1 -->
                         <div class="bottom-content-pane active" id="pane-term-1">
-                            <div class="terminal-output" id="terminal-output-1">Earnest IDE Terminal 1 actif. Tapez vos commandes...
-</div>
+                            <div class="terminal-output" id="terminal-output-1">Earnest IDE Terminal 1 actif. Tapez vos
+                                commandes...
+                            </div>
                             <div class="terminal-input-bar">
                                 <span class="terminal-prompt-sym">&gt;</span>
-                                <input type="text" id="terminal-input-1" placeholder="Exécuter une commande..." spellcheck="false" autocomplete="off" />
+                                <input type="text" id="terminal-input-1" placeholder="Exécuter une commande..."
+                                    spellcheck="false" autocomplete="off" />
                             </div>
                         </div>
 
                         <!-- Onglet Terminal 2 -->
                         <div class="bottom-content-pane" id="pane-term-2">
-                            <div class="terminal-output" id="terminal-output-2">Earnest IDE Terminal 2 (Second worker shell) actif.
-</div>
+                            <div class="terminal-output" id="terminal-output-2">Earnest IDE Terminal 2 (Second worker
+                                shell) actif.
+                            </div>
                             <div class="terminal-input-bar">
                                 <span class="terminal-prompt-sym">&gt;</span>
-                                <input type="text" id="terminal-input-2" placeholder="Exécuter dans le worker..." spellcheck="false" autocomplete="off" />
+                                <input type="text" id="terminal-input-2" placeholder="Exécuter dans le worker..."
+                                    spellcheck="false" autocomplete="off" />
                             </div>
                         </div>
 
                         <!-- Onglet Problèmes -->
                         <div class="bottom-content-pane" id="pane-problems">
-                            <div id="bottom-problems-content" style="padding: 0.75rem 1rem; overflow-y: auto; font-family: var(--font-mono); font-size: 0.8rem;"></div>
+                            <div id="bottom-problems-content"
+                                style="padding: 0.75rem 1rem; overflow-y: auto; font-family: var(--font-mono); font-size: 0.8rem;">
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -1100,29 +1311,41 @@
                 <!-- 3. Assistant ReAct Pair Programmer Dédié -->
                 <section class="ide-agent-pane">
                     <div class="agent-header">
-                        <div style="font-family: var(--font-mono); font-size: 0.78rem; font-weight: 700; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.4rem;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                        <div
+                            style="font-family: var(--font-mono); font-size: 0.78rem; font-weight: 700; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.4rem;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="16 18 22 12 16 6"></polyline>
+                                <polyline points="8 6 2 12 8 18"></polyline>
+                            </svg>
                             PAIR PROGRAMMER
                         </div>
                         <div style="display: flex; gap: 4px;">
-                            <button class="icon-btn" id="btn-toggle-history" title="Historique des sessions" style="font-size: 0.72rem; color: var(--accent-amber);">📜 Reprendre</button>
+                            <button class="icon-btn" id="btn-toggle-history" title="Historique des sessions"
+                                style="font-size: 0.72rem; color: var(--accent-amber);">📜 Reprendre</button>
                             <button class="icon-btn" id="btn-clear-agent" style="font-size: 0.72rem;">Nouveau</button>
                         </div>
                     </div>
 
                     <!-- Tiroir déroulant de l'historique des sessions -->
-                    <div id="agent-history-pane" style="display: none; max-height: 180px; overflow-y: auto; background: #0b0f19; border-bottom: 1px solid var(--border-subtle); padding: 0.5rem; flex-direction: column; gap: 0.35rem; font-family: var(--font-mono); font-size: 0.72rem;"></div>
+                    <div id="agent-history-pane"
+                        style="display: none; max-height: 180px; overflow-y: auto; background: #0b0f19; border-bottom: 1px solid var(--border-subtle); padding: 0.5rem; flex-direction: column; gap: 0.35rem; font-family: var(--font-mono); font-size: 0.72rem;">
+                    </div>
 
                     <div class="agent-stream" id="agent-chat-stream">
-                        <div class="chat-bubble assistant" style="background: rgba(30, 41, 59, 0.4); border: 1px solid var(--border-subtle); padding: 0.75rem; border-radius: var(--radius-sm); font-size: 0.8rem; line-height: 1.45;">
-                            👋 Bienvenue dans <strong>Earnest IDE Pro</strong>. Monaco Editor, Git Control, Command Palette (`Ctrl+P`), Inline AI (`Ctrl+K`) et Multi-Terminaux sont opérationnels.
+                        <div class="chat-bubble assistant"
+                            style="background: rgba(30, 41, 59, 0.4); border: 1px solid var(--border-subtle); padding: 0.75rem; border-radius: var(--radius-sm); font-size: 0.8rem; line-height: 1.45;">
+                            👋 Bienvenue dans <strong>Earnest IDE Pro</strong>. Monaco Editor, Git Control, Command
+                            Palette (`Ctrl+P`), Inline AI (`Ctrl+K`) et Multi-Terminaux sont opérationnels.
                         </div>
                     </div>
 
                     <div class="agent-input-box">
                         <div style="display: flex; gap: 0.5rem;">
-                            <input type="text" id="agent-prompt" placeholder="Consigne de développement..." style="flex: 1; font-size: 0.8rem;" />
-                            <button id="btn-agent-send" class="btn-primary" style="padding: 0.4rem 0.85rem; font-size: 0.78rem;">Exécuter</button>
+                            <input type="text" id="agent-prompt" placeholder="Consigne de développement..."
+                                style="flex: 1; font-size: 0.8rem;" />
+                            <button id="btn-agent-send" class="btn-primary"
+                                style="padding: 0.4rem 0.85rem; font-size: 0.78rem;">Exécuter</button>
                         </div>
                     </div>
                 </section>
@@ -1148,7 +1371,8 @@
     <!-- Quick Open / Command Palette Modal (Ctrl+P) -->
     <div class="palette-overlay" id="palette-modal">
         <div class="palette-input-box">
-            <input type="text" id="palette-input" class="palette-input" placeholder="Aller à un fichier... (tapez son nom)" autocomplete="off" />
+            <input type="text" id="palette-input" class="palette-input"
+                placeholder="Aller à un fichier... (tapez son nom)" autocomplete="off" />
         </div>
         <div class="palette-list" id="palette-list"></div>
     </div>
@@ -1156,85 +1380,110 @@
     <!-- Modal Gestionnaire de Projets -->
     <div class="palette-overlay" id="project-modal" style="width: 540px;">
         <div class="palette-input-box" style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="font-weight: 700; color: #fff; font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem;">
+            <div
+                style="font-weight: 700; color: #fff; font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem;">
                 <span>📁 GESTIONNAIRE DE PROJETS</span>
             </div>
-            <button id="btn-toggle-new-project" class="btn-primary" style="padding: 2px 8px; font-size: 0.72rem;">+ Nouveau Projet</button>
+            <button id="btn-toggle-new-project" class="btn-primary" style="padding: 2px 8px; font-size: 0.72rem;">+
+                Nouveau Projet</button>
         </div>
 
         <!-- Formulaire Création Projet -->
-        <div id="new-project-form" style="display: none; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-subtle); background: rgba(15, 23, 42, 0.8); flex-direction: column; gap: 0.4rem; font-family: var(--font-mono); font-size: 0.75rem;">
+        <div id="new-project-form"
+            style="display: none; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-subtle); background: rgba(15, 23, 42, 0.8); flex-direction: column; gap: 0.4rem; font-family: var(--font-mono); font-size: 0.75rem;">
             <div>
                 <label style="color: var(--text-muted); font-size: 0.7rem;">Nom du projet</label>
-                <input type="text" id="proj-name-input" placeholder="ex: Mon App Web, Backend API" style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
+                <input type="text" id="proj-name-input" placeholder="ex: Mon App Web, Backend API"
+                    style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
             </div>
             <div>
-                <label style="color: var(--text-muted); font-size: 0.7rem;">Chemin dossier racine (relatif ou absolu)</label>
-                <input type="text" id="proj-root-input" placeholder="ex: . ou /path/to/project" style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
+                <label style="color: var(--text-muted); font-size: 0.7rem;">Chemin dossier racine (relatif ou
+                    absolu)</label>
+                <input type="text" id="proj-root-input" placeholder="ex: . ou /path/to/project"
+                    style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
             </div>
 
             <!-- Choix des 3 Modalités de démarrage (Gouvernance d'agent) -->
             <div style="margin-top: 0.4rem;">
-                <label style="color: var(--accent-cyan); font-weight: 700; font-size: 0.72rem; display: block; margin-bottom: 0.35rem;">
+                <label
+                    style="color: var(--accent-cyan); font-weight: 700; font-size: 0.72rem; display: block; margin-bottom: 0.35rem;">
                     🛡️ Modalité de Gouvernance de l'Agent :
                 </label>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.4rem;">
-                    <label class="gov-mode-card" style="border: 1px solid var(--border-subtle); border-radius: 4px; padding: 0.45rem; background: rgba(30, 41, 59, 0.4); cursor: pointer; display: flex; flex-direction: column; gap: 0.2rem;">
+                    <label class="gov-mode-card"
+                        style="border: 1px solid var(--border-subtle); border-radius: 4px; padding: 0.45rem; background: rgba(30, 41, 59, 0.4); cursor: pointer; display: flex; flex-direction: column; gap: 0.2rem;">
                         <div style="display: flex; align-items: center; gap: 0.3rem;">
                             <input type="radio" name="proj-gov-mode" value="normal" checked />
                             <strong style="color: #fff; font-size: 0.72rem;">1. Normal</strong>
                         </div>
-                        <span style="color: var(--text-muted); font-size: 0.65rem;">Outils ouverts standards (read, write, terminal)</span>
+                        <span style="color: var(--text-muted); font-size: 0.65rem;">Outils ouverts standards (read,
+                            write, terminal)</span>
                     </label>
 
-                    <label class="gov-mode-card" style="border: 1px solid var(--border-subtle); border-radius: 4px; padding: 0.45rem; background: rgba(30, 41, 59, 0.4); cursor: pointer; display: flex; flex-direction: column; gap: 0.2rem;">
+                    <label class="gov-mode-card"
+                        style="border: 1px solid var(--border-subtle); border-radius: 4px; padding: 0.45rem; background: rgba(30, 41, 59, 0.4); cursor: pointer; display: flex; flex-direction: column; gap: 0.2rem;">
                         <div style="display: flex; align-items: center; gap: 0.3rem;">
                             <input type="radio" name="proj-gov-mode" value="architecture" />
                             <strong style="color: #38bdf8; font-size: 0.72rem;">3. Archi Spec-First</strong>
                         </div>
-                        <span style="color: var(--text-muted); font-size: 0.65rem;">Zéro code écrit. Spécification d'invariants & validation humaine</span>
+                        <span style="color: var(--text-muted); font-size: 0.65rem;">Zéro code écrit. Spécification
+                            d'invariants & validation humaine</span>
                     </label>
 
-                    <label class="gov-mode-card" style="border: 1px solid var(--border-subtle); border-radius: 4px; padding: 0.45rem; background: rgba(30, 41, 59, 0.4); cursor: pointer; display: flex; flex-direction: column; gap: 0.2rem;">
+                    <label class="gov-mode-card"
+                        style="border: 1px solid var(--border-subtle); border-radius: 4px; padding: 0.45rem; background: rgba(30, 41, 59, 0.4); cursor: pointer; display: flex; flex-direction: column; gap: 0.2rem;">
                         <div style="display: flex; align-items: center; gap: 0.3rem;">
                             <input type="radio" name="proj-gov-mode" value="constrained" />
                             <strong style="color: #4ade80; font-size: 0.72rem;">2. Contraint</strong>
                         </div>
-                        <span style="color: var(--text-muted); font-size: 0.65rem;">write_code sous contrôle Shadow Sandbox & lock SHA-256</span>
+                        <span style="color: var(--text-muted); font-size: 0.65rem;">write_code sous contrôle Shadow
+                            Sandbox & lock SHA-256</span>
                     </label>
                 </div>
             </div>
             <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
-                <button id="btn-submit-new-project" class="btn-primary" style="flex: 1; padding: 4px; font-size: 0.72rem;">Créer & Basculer</button>
-                <button id="btn-cancel-new-project" class="icon-btn" style="border: 1px solid var(--border-subtle); padding: 4px 8px; font-size: 0.72rem;">Annuler</button>
+                <button id="btn-submit-new-project" class="btn-primary"
+                    style="flex: 1; padding: 4px; font-size: 0.72rem;">Créer & Basculer</button>
+                <button id="btn-cancel-new-project" class="icon-btn"
+                    style="border: 1px solid var(--border-subtle); padding: 4px 8px; font-size: 0.72rem;">Annuler</button>
             </div>
         </div>
 
         <div class="palette-list" id="project-list" style="padding: 0.5rem;"></div>
-        <div style="padding: 0.4rem 1rem; border-top: 1px solid var(--border-subtle); background: var(--surface-dim); display: flex; justify-content: flex-end;">
+        <div
+            style="padding: 0.4rem 1rem; border-top: 1px solid var(--border-subtle); background: var(--surface-dim); display: flex; justify-content: flex-end;">
             <button id="btn-close-project-modal" class="icon-btn" style="font-size: 0.72rem;">Fermer (Échap)</button>
         </div>
     </div>
 
     <!-- Modal Approbation Humaine de Gouvernance -->
     <div class="palette-overlay" id="governance-approval-modal" style="width: 620px; z-index: 10000;">
-        <div class="palette-input-box" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--accent-cyan);">
-            <div style="font-weight: 700; color: #fff; font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem;">
+        <div class="palette-input-box"
+            style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--accent-cyan);">
+            <div
+                style="font-weight: 700; color: #fff; font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem;">
                 <span id="gov-modal-title">🛡️ VALIDATION HUMAINE D'ARCHITECTURE</span>
             </div>
-            <span id="gov-modal-badge" style="font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; background: rgba(56, 189, 248, 0.2); color: #38bdf8;">Mode 3 &rarr; Mode 2</span>
+            <span id="gov-modal-badge"
+                style="font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; background: rgba(56, 189, 248, 0.2); color: #38bdf8;">Mode
+                3 &rarr; Mode 2</span>
         </div>
 
-        <div id="gov-modal-body" style="padding: 1rem; max-height: 400px; overflow-y: auto; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-main); display: flex; flex-direction: column; gap: 0.75rem;">
+        <div id="gov-modal-body"
+            style="padding: 1rem; max-height: 400px; overflow-y: auto; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-main); display: flex; flex-direction: column; gap: 0.75rem;">
             <!-- Contenu dynamique : diff, diagnostic ou résumé -->
         </div>
 
-        <div style="padding: 0.6rem 1rem; border-top: 1px solid var(--border-subtle); background: var(--surface-dim); display: flex; justify-content: flex-end; gap: 0.5rem;">
-            <button id="btn-gov-reject" class="icon-btn" style="border: 1px solid var(--border-subtle); padding: 4px 12px; font-size: 0.75rem;">Refuser</button>
-            <button id="btn-gov-approve" class="btn-primary" style="padding: 4px 14px; font-size: 0.75rem;">Approuver & Sceller</button>
+        <div
+            style="padding: 0.6rem 1rem; border-top: 1px solid var(--border-subtle); background: var(--surface-dim); display: flex; justify-content: flex-end; gap: 0.5rem;">
+            <button id="btn-gov-reject" class="icon-btn"
+                style="border: 1px solid var(--border-subtle); padding: 4px 12px; font-size: 0.75rem;">Refuser</button>
+            <button id="btn-gov-approve" class="btn-primary" style="padding: 4px 14px; font-size: 0.75rem;">Approuver &
+                Sceller</button>
         </div>
     </div>
 
     <script type="module" src="js/app.js"></script>
 </body>
+
 </html>

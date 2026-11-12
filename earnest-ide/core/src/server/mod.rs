@@ -468,6 +468,31 @@ fn handle_request(mut req: tiny_http::Request) {
             return;
         }
 
+        // --- GOUVERNANCE PAR INVARIANTS : LISTING DES CONTRATS & INVARIANTS ---
+        if path == "/api/ide/invariants" {
+            let root_str = query.get("root").map(|s| s.as_str()).unwrap_or(".");
+            let root_path = PathBuf::from(root_str);
+            let pm = crate::governance::PolicyManager::new(&root_path);
+            let policy = pm.load_or_init(None).unwrap_or_default();
+            let inv_path = root_path.join(&policy.invariants_file);
+
+            let res_json = if inv_path.exists() {
+                if let Ok(c) = fs::read_to_string(&inv_path) {
+                    serde_json::from_str::<Value>(&c).unwrap_or_else(|_| serde_json::json!({ "invariants": [], "contracts": [] }))
+                } else {
+                    serde_json::json!({ "invariants": [], "contracts": [] })
+                }
+            } else {
+                serde_json::json!({ "invariants": [], "contracts": [] })
+            };
+
+            let resp = Response::from_string(res_json.to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
         // --- BASE DE CONNAISSANCES D'EXPÉRIENCE (BCPE) : LISTE & RECHERCHE ---
         if path == "/api/ide/kb/entries" {
             let q_filter = query.get("q").map(|s| s.to_lowercase()).unwrap_or_default();
@@ -1032,6 +1057,48 @@ Garde l'indentation appropriée.";
                     req.respond(resp).ok();
                 }
             }
+            return;
+        }
+
+        // --- GOUVERNANCE PAR INVARIANTS : REVALIDATION DES INVARIANTS (EXECUTION SONDES) ---
+        if path == "/api/ide/governance/check_invariants" {
+            let root_str = payload["root"].as_str().or_else(|| query.get("root").map(|s| s.as_str())).unwrap_or(".");
+            let root_path = PathBuf::from(root_str);
+
+            let python_bin = if cfg!(windows) { "python" } else { "python3" };
+            let script_candidates = vec![
+                root_path.join("tests/validate_invariants.py"),
+                PathBuf::from("tests/validate_invariants.py"),
+                PathBuf::from("../tests/validate_invariants.py"),
+            ];
+
+            let script_path = script_candidates.into_iter().find(|p| p.exists())
+                .unwrap_or_else(|| PathBuf::from("tests/validate_invariants.py"));
+
+            let output = std::process::Command::new(python_bin)
+                .arg(&script_path)
+                .current_dir(&root_path)
+                .output();
+
+            let (success, out_str) = match output {
+                Ok(out) => {
+                    let combined = format!(
+                        "{}\n{}",
+                        String::from_utf8_lossy(&out.stdout),
+                        String::from_utf8_lossy(&out.stderr)
+                    ).trim().to_string();
+                    (out.status.success(), combined)
+                }
+                Err(e) => (false, format!("Erreur exécution python: {}", e)),
+            };
+
+            let resp = Response::from_string(serde_json::json!({
+                "success": success,
+                "output": out_str
+            }).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
             return;
         }
 

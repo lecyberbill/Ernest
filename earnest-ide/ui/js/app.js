@@ -882,7 +882,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Récupérer la liste des invariants détaillés
             const invRes = await fetch(`/api/ide/invariants?root=${encodeURIComponent(state.currentRoot || '.')}`);
             const invData = await invRes.json();
-            const contracts = (invData && invData.contracts) ? invData.contracts : [];
+            const contracts = (invData && (invData.invariants || invData.contracts)) ? (invData.invariants || invData.contracts) : [];
 
             if (contracts.length === 0) {
                 centralGovInvariantsList.innerHTML = '<div style="color:var(--text-muted); padding:0.5rem;">Aucun contrat défini dans .ide/invariants.json</div>';
@@ -897,9 +897,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="display:flex; flex-direction:column; gap:0.25rem;">
                         <div style="display:flex; align-items:center; gap:0.5rem;">
                             <span style="color:var(--accent-cyan); font-weight:700;">[${escapeHtml(c.id)}]</span>
-                            <span style="color:#fff; font-weight:600;">${escapeHtml(c.title || c.description || '')}</span>
+                            <span style="color:#fff; font-weight:600;">${escapeHtml(c.title || c.statement || c.description || '')}</span>
                         </div>
-                        <div style="color:var(--text-muted); font-size:0.72rem;">${escapeHtml(c.description || '')}</div>
+                        <div style="color:var(--text-muted); font-size:0.72rem;">${escapeHtml(c.statement || c.description || '')}</div>
                     </div>
                     <div style="display:flex; align-items:center; gap:0.5rem;">
                         <span style="color:var(--accent-emerald); font-size:0.72rem; border:1px solid rgba(16,185,129,0.3); background:rgba(16,185,129,0.1); padding:2px 8px; border-radius:4px;">Actif (Exit 0)</span>
