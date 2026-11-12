@@ -242,7 +242,7 @@ fn handle_request(mut req: tiny_http::Request) {
             return;
         }
 
-        if path == "/api/ide/models" {
+        if path == "/api/ide/models" || path == "/api/model_providers" {
             let conn = get_connection(None).unwrap();
             let mut list = Vec::new();
             if let Ok(mut stmt) = conn.prepare("SELECT id, name, provider_type, base_url, model, (api_key IS NOT NULL AND api_key != '') as has_key, is_enabled, priority FROM model_providers ORDER BY priority ASC, created_at ASC") {
@@ -264,6 +264,38 @@ fn handle_request(mut req: tiny_http::Request) {
                 }
             }
             let resp = Response::from_string(serde_json::json!(list).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/settings" {
+            let conn = get_connection(None).unwrap();
+            let mut settings = serde_json::Map::new();
+            if let Ok(mut stmt) = conn.prepare("SELECT key, value, is_secret FROM app_settings") {
+                if let Ok(rows) = stmt.query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i32>(2)? == 1))
+                }) {
+                    for r in rows.flatten() {
+                        let (k, v, is_secret) = r;
+                        settings.insert(k, serde_json::json!(if is_secret { "***" } else { &v }));
+                    }
+                }
+            }
+            let resp = Response::from_string(serde_json::json!(settings).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/mcp/servers" {
+            let conn = get_connection(None).unwrap();
+            let servers_json = conn.query_row("SELECT value FROM app_settings WHERE key = 'mcp_servers_config'", [], |r| r.get::<_, String>(0))
+                .unwrap_or_else(|_| "[]".to_string());
+            let servers: Value = serde_json::from_str(&servers_json).unwrap_or_else(|_| serde_json::json!([]));
+            let resp = Response::from_string(servers.to_string())
                 .with_header(json_header)
                 .with_header(cors_header);
             req.respond(resp).ok();
@@ -915,7 +947,7 @@ Garde l'indentation appropriée.";
             return;
         }
 
-        if path == "/api/ide/model_providers" {
+        if path == "/api/ide/model_providers" || path == "/api/model_providers" {
             let conn = get_connection(None).unwrap();
             let p_id = payload["id"].as_str().map(|s| s.to_string()).unwrap_or_else(|| format!("provider_{}", &uuid::Uuid::new_v4().to_string().replace('-', "")[..8]));
             let name = payload["name"].as_str().unwrap_or("Nouveau Modèle");
@@ -937,7 +969,7 @@ Garde l'indentation appropriée.";
             return;
         }
 
-        if path == "/api/ide/model_providers/toggle" {
+        if path == "/api/ide/model_providers/toggle" || path == "/api/model_providers/toggle" {
             let conn = get_connection(None).unwrap();
             let p_id = payload["id"].as_str().unwrap_or("");
             let mut new_val = 1;
@@ -952,11 +984,46 @@ Garde l'indentation appropriée.";
             return;
         }
 
-        if path == "/api/ide/model_providers/delete" {
+        if path == "/api/ide/model_providers/delete" || path == "/api/model_providers/delete" {
             let conn = get_connection(None).unwrap();
             let p_id = payload["id"].as_str().unwrap_or("");
             conn.execute("DELETE FROM model_providers WHERE id = ?", [p_id]).ok();
             let resp = Response::from_string(serde_json::json!({"status": "deleted", "id": p_id}).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/settings" {
+            let conn = get_connection(None).unwrap();
+            if let Some(obj) = payload.as_object() {
+                for (k, v) in obj {
+                    let val_str = v.as_str().unwrap_or("");
+                    if val_str != "***" {
+                        conn.execute(
+                            "INSERT INTO app_settings (key, value, is_secret, updated_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=CURRENT_TIMESTAMP",
+                            rusqlite::params![k, val_str],
+                        ).ok();
+                    }
+                }
+            }
+            let resp = Response::from_string(serde_json::json!({"status": "ok"}).to_string())
+                .with_header(json_header)
+                .with_header(cors_header);
+            req.respond(resp).ok();
+            return;
+        }
+
+        if path == "/api/mcp/servers" {
+            let conn = get_connection(None).unwrap();
+            let servers = payload.get("servers").cloned().unwrap_or_else(|| serde_json::json!([]));
+            let json_str = serde_json::to_string(&servers).unwrap_or_else(|_| "[]".to_string());
+            conn.execute(
+                "INSERT INTO app_settings (key, value, is_secret, updated_at) VALUES ('mcp_servers_config', ?, 0, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=CURRENT_TIMESTAMP",
+                rusqlite::params![json_str],
+            ).ok();
+            let resp = Response::from_string(serde_json::json!({"status": "ok"}).to_string())
                 .with_header(json_header)
                 .with_header(cors_header);
             req.respond(resp).ok();
