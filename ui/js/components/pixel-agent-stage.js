@@ -90,6 +90,10 @@ export class PixelAgentStage extends HTMLElement {
         this.providers.forEach((p, idx) => {
             const palette = colorPalettes[idx % colorPalettes.length];
             const isEnabled = p.is_enabled !== 0;
+            const isOnline = p.is_online === true;
+
+            const statusDotColor = !isEnabled ? 'var(--text-muted)' : (isOnline ? 'var(--accent-emerald)' : 'var(--accent-amber)');
+            const statusLabel = !isEnabled ? 'DÉCONNECTÉ' : (isOnline ? 'DOCK : EN VEILLE' : 'HORS-LIGNE');
 
             const win = document.createElement('div');
             win.id = `robot-card-${p.id}`;
@@ -110,7 +114,7 @@ export class PixelAgentStage extends HTMLElement {
             win.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 0.4rem;">
                     <div style="display: flex; align-items: center; gap: 0.4rem; overflow: hidden;">
-                        <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: ${isEnabled ? palette.main : 'var(--text-muted)'};"></span>
+                        <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: ${statusDotColor};"></span>
                         <strong style="font-size: 0.78rem; color: var(--text-primary); font-family: var(--font-mono); white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">${p.name}</strong>
                     </div>
                     <span class="bot-badge" style="font-size: 0.65rem; font-family: var(--font-mono); padding: 0.1rem 0.35rem; border-radius: 3px; background: rgba(255,255,255,0.06); color: ${palette.light}; text-transform: uppercase;">${p.provider_type || 'LLM'}</span>
@@ -124,8 +128,8 @@ export class PixelAgentStage extends HTMLElement {
                         <div style="color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                             <span>Modèle : </span><code style="color: ${palette.light};">${p.model}</code>
                         </div>
-                        <div class="bot-state-text" style="color: var(--text-muted); font-size: 0.7rem; font-weight: 600;">
-                            ${isEnabled ? 'DOCK : EN VEILLE' : 'DÉCONNECTÉ'}
+                        <div class="bot-state-text" style="color: ${!isEnabled ? 'var(--text-muted)' : (isOnline ? 'var(--text-muted)' : 'var(--accent-amber)')}; font-size: 0.7rem; font-weight: 600;">
+                            ${statusLabel}
                         </div>
                         <div class="bot-activity-bar" style="height: 3px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; margin-top: 0.15rem;">
                             <div class="bot-activity-fill" style="height: 100%; width: 0%; background: ${palette.main}; transition: width 0.3s;"></div>
@@ -363,8 +367,10 @@ export class PixelAgentStage extends HTMLElement {
                 botData.statusTextEl.textContent = txt;
                 botData.statusTextEl.style.color = col;
             } else {
-                botData.statusTextEl.textContent = botData.provider.is_enabled ? 'DOCK : EN VEILLE' : 'DÉCONNECTÉ';
-                botData.statusTextEl.style.color = 'var(--text-muted)';
+                const isOnline = botData.provider.is_online === true;
+                const isEnabled = botData.provider.is_enabled !== 0;
+                botData.statusTextEl.textContent = !isEnabled ? 'DÉCONNECTÉ' : (isOnline ? 'DOCK : EN VEILLE' : 'HORS-LIGNE');
+                botData.statusTextEl.style.color = !isEnabled ? 'var(--text-muted)' : (isOnline ? 'var(--text-muted)' : 'var(--accent-amber)');
             }
         });
 

@@ -245,17 +245,48 @@ fn handle_request(mut req: tiny_http::Request) {
         if path == "/api/ide/models" || path == "/api/model_providers" {
             let conn = get_connection(None).unwrap();
             let mut list = Vec::new();
-            if let Ok(mut stmt) = conn.prepare("SELECT id, name, provider_type, base_url, model, (api_key IS NOT NULL AND api_key != '') as has_key, is_enabled, priority FROM model_providers ORDER BY priority ASC, created_at ASC") {
+            if let Ok(mut stmt) = conn.prepare("SELECT id, name, provider_type, base_url, model, (api_key IS NOT NULL AND api_key != '') as has_key, is_enabled, priority, api_key FROM model_providers ORDER BY priority ASC, created_at ASC") {
                 if let Ok(rows) = stmt.query_map([], |row| {
+                    let id: String = row.get(0)?;
+                    let name: String = row.get(1)?;
+                    let provider_type: String = row.get(2)?;
+                    let base_url: String = row.get(3)?;
+                    let model: String = row.get(4)?;
+                    let has_key = row.get::<_, i32>(5)? == 1;
+                    let is_enabled = row.get::<_, i32>(6)? == 1;
+                    let priority: i32 = row.get(7)?;
+                    let api_key: Option<String> = row.get(8)?;
+
+                    // Ping rapide avec timeout court (600ms) pour refléter l'état réel (en ligne vs hors-ligne)
+                    let is_online = if is_enabled {
+                        let ping_client = reqwest::blocking::Client::builder()
+                            .timeout(std::time::Duration::from_millis(600))
+                            .build()
+                            .unwrap_or_else(|_| reqwest::blocking::Client::new());
+                        let ping_url = if provider_type == "ollama" {
+                            format!("{}/api/tags", base_url.trim_end_matches('/'))
+                        } else {
+                            format!("{}/v1/models", base_url.trim_end_matches('/'))
+                        };
+                        let mut req = ping_client.get(&ping_url);
+                        if let Some(ref k) = api_key {
+                            req = req.header("Authorization", format!("Bearer {}", k));
+                        }
+                        req.send().map(|res| res.status().is_success()).unwrap_or(false)
+                    } else {
+                        false
+                    };
+
                     Ok(serde_json::json!({
-                        "id": row.get::<_, String>(0)?,
-                        "name": row.get::<_, String>(1)?,
-                        "provider_type": row.get::<_, String>(2)?,
-                        "base_url": row.get::<_, String>(3)?,
-                        "model": row.get::<_, String>(4)?,
-                        "has_key": row.get::<_, i32>(5)? == 1,
-                        "is_enabled": row.get::<_, i32>(6)? == 1,
-                        "priority": row.get::<_, i32>(7)?
+                        "id": id,
+                        "name": name,
+                        "provider_type": provider_type,
+                        "base_url": base_url,
+                        "model": model,
+                        "has_key": has_key,
+                        "is_enabled": is_enabled,
+                        "is_online": is_online,
+                        "priority": priority
                     }))
                 }) {
                     for r in rows.flatten() {
