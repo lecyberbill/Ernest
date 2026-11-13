@@ -55,7 +55,7 @@ impl<'a> ReActEngine<'a> {
             router,
             project_id: project_id.to_string(),
             workspace_root: ws_path,
-            max_steps: 12,
+            max_steps: 30,
         }
     }
 
@@ -122,9 +122,26 @@ impl<'a> ReActEngine<'a> {
                     }).to_string(), None),
                 };
 
-                // Exécution dans le shadow worktree
+                // Exécution dans le shadow worktree (mono-fichier ou multi-fichiers atomique via `files`)
                 let runner = ShadowRunner::new(&self.workspace_root, &policy.shadow_env.path, policy.shadow_env.timeout_ms);
-                let exec_result = runner.execute_contract_patch(target_contract, target_file, patch);
+                let exec_result = if let Some(files_arr) = args["files"].as_array().filter(|a| !a.is_empty()) {
+                    let mut pairs: Vec<(&str, &str)> = Vec::with_capacity(files_arr.len());
+                    for item in files_arr {
+                        let f = item["target_file"].as_str().or_else(|| item["path"].as_str()).unwrap_or("");
+                        let p = item["patch"].as_str().or_else(|| item["content"].as_str()).unwrap_or("");
+                        if !f.is_empty() {
+                            pairs.push((f, p));
+                        }
+                    }
+                    let primary = if !target_file.is_empty() {
+                        target_file
+                    } else {
+                        pairs.first().map(|(f, _)| *f).unwrap_or("")
+                    };
+                    runner.execute_contract_patches(target_contract, &pairs, primary)
+                } else {
+                    runner.execute_contract_patch(target_contract, target_file, patch)
+                };
 
                 if exec_result.success {
                     // Réinitialiser les échecs consécutifs pour les sondes de ce contrat
@@ -183,6 +200,29 @@ impl<'a> ReActEngine<'a> {
             // 2. submit_invariants (Mode 3 Architecture)
             "submit_invariants" => {
                 let invariants_val = &args["invariants"];
+                if let Err(e) = serde_json::from_value::<InvariantsFile>(invariants_val.clone()) {
+                    return (serde_json::json!({
+                        "status": "error",
+                        "error": format!("Schéma InvariantsFile invalide: {}.", e),
+                        "expected_schema": {
+                            "project_id": "string",
+                            "contracts": [{
+                                "id": "C1",
+                                "title": "string",
+                                "statement": "string",
+                                "criticality": "critical|high|medium",
+                                "target_file": "path/to/file.rs",
+                                "probes": [{
+                                    "probe_id": "C1-P1",
+                                    "runner": "cargo_test|cli|static",
+                                    "query": "test_name_or_regex_or_null",
+                                    "command": "cli_cmd_or_null",
+                                    "expect": "pass"
+                                }]
+                            }]
+                        }
+                    }).to_string(), None);
+                }
                 let inv_path = self.workspace_root.join(&policy.invariants_file);
                 if let Some(parent) = inv_path.parent() {
                     std::fs::create_dir_all(parent).ok();
@@ -361,7 +401,13 @@ impl<'a> ReActEngine<'a> {
             }
             "grep_search" => {
                 let query = args["query"].as_str().unwrap_or("");
-                let root = args["root_path"].as_str().unwrap_or(self.workspace_root.to_str().unwrap_or("."));
+                let raw_root = args["root_path"].as_str().unwrap_or(".");
+                let resolved_root = if Path::new(raw_root).is_absolute() {
+                    PathBuf::from(raw_root)
+                } else {
+                    self.workspace_root.join(raw_root)
+                };
+                let root = resolved_root.to_str().unwrap_or(raw_root);
                 let max = args["max_results"].as_u64().map(|v| v as usize);
                 match grep_search(root, query, max) {
                     Ok(res) => (res.to_string(), None),
@@ -369,7 +415,13 @@ impl<'a> ReActEngine<'a> {
                 }
             }
             "list_files" => {
-                let root = args["root_path"].as_str().unwrap_or(self.workspace_root.to_str().unwrap_or("."));
+                let raw_root = args["root_path"].as_str().unwrap_or(".");
+                let resolved_root = if Path::new(raw_root).is_absolute() {
+                    PathBuf::from(raw_root)
+                } else {
+                    self.workspace_root.join(raw_root)
+                };
+                let root = resolved_root.to_str().unwrap_or(raw_root);
                 let depth = args["max_depth"].as_u64().map(|v| v as usize);
                 match list_files(root, depth) {
                     Ok(res) => (res.to_string(), None),
@@ -440,7 +492,15 @@ impl<'a> ReActEngine<'a> {
                 let pid = args["product_id"].as_str().unwrap_or("earnest");
                 let q = args["query"].as_str().unwrap_or("");
                 let mcp = crate::mcp::McpClient::new(
-                    r"earnest-bcpe\target\release\kb.exe",
+                    [
+                        r"earnest-bcpe\target\release\kb.exe",
+                        r"..\earnest-bcpe\target\release\kb.exe",
+                        r"..\..\earnest-bcpe\target\release\kb.exe",
+                        r"D:\Projet\Hernest\earnest-bcpe\target\release\kb.exe",
+                    ]
+                    .into_iter()
+                    .find(|p| std::path::Path::new(p).exists())
+                    .unwrap_or(r"earnest-bcpe\target\release\kb.exe"),
                     &["serve".to_string(), "--db".to_string(), r"earnest-bcpe\kb.db".to_string()]
                 );
                 let call_args = serde_json::json!({ "product_id": pid, "query": q });
@@ -460,7 +520,15 @@ impl<'a> ReActEngine<'a> {
                 let example = args["example"].as_str();
 
                 let mcp = crate::mcp::McpClient::new(
-                    r"earnest-bcpe\target\release\kb.exe",
+                    [
+                        r"earnest-bcpe\target\release\kb.exe",
+                        r"..\earnest-bcpe\target\release\kb.exe",
+                        r"..\..\earnest-bcpe\target\release\kb.exe",
+                        r"D:\Projet\Hernest\earnest-bcpe\target\release\kb.exe",
+                    ]
+                    .into_iter()
+                    .find(|p| std::path::Path::new(p).exists())
+                    .unwrap_or(r"earnest-bcpe\target\release\kb.exe"),
                     &["serve".to_string(), "--db".to_string(), r"earnest-bcpe\kb.db".to_string()]
                 );
 
@@ -567,7 +635,7 @@ impl<'a> ReActEngine<'a> {
         let mode_desc = match policy.mode {
             GovernanceMode::Normal => "MODE 1 (NORMAL) : Tu as un accès libre aux outils de développement usuels.",
             GovernanceMode::Architecture => "MODE 3 (ARCHITECTURE / SPEC-FIRST) : Interdiction FORMELLE d'écrire ou modifier du code source directement. Tu dois concevoir l'architecture et formaliser les contrats d'invariants avec 'submit_invariants' puis demander la validation humaine via 'request_architecture_review'.",
-            GovernanceMode::Constrained => "MODE 2 (CONTRAINT PAR INVARIANTS) : Toute modification de code passe IMPÉRATIVEMENT par 'write_code' et est validée en sandbox isolée (shadow worktree) par les sondes cryptographiques scellées. Si tu es bloqué par un contrat, utilise 'request_contract_mutation'.",
+            GovernanceMode::Constrained => "MODE 2 (CONTRAINT PAR INVARIANTS) : Toute modification de code passe IMPÉRATIVEMENT par 'write_code' et est validée en sandbox isolée (shadow worktree) par les sondes cryptographiques scellées. Sur un nouveau projet, le shadow worktree est réinitialisé à chaque 'write_code' : inclus dans le même appel (via 'files') le manifeste/config du langage, le point d'entrée, le module cible et son test pour que la sonde compile et s'exécute dès le premier essai. Si tu es bloqué par un contrat, utilise 'request_contract_mutation'.",
         };
 
         let system_prompt = format!(
@@ -591,11 +659,15 @@ impl<'a> ReActEngine<'a> {
         let mut step_order = 1;
         let mut total_tokens = 0;
         let mut final_answer = String::new();
-        let mut active_backend_name;
+        let mut active_backend_name = String::new();
         let mut failure_counts: HashMap<String, usize> = HashMap::new();
 
         for _ in 0..self.max_steps {
+            compact_messages_if_needed(&mut messages, 36_000);
             let (chat_res, active_backend) = self.router.chat_completion_with_fallback(&messages, Some(&tools))?;
+            if active_backend != active_backend_name {
+                println!("  🤖 [LLM] Backend actif : {}", active_backend);
+            }
             active_backend_name = active_backend;
             total_tokens += chat_res.total_tokens;
 
@@ -639,6 +711,7 @@ impl<'a> ReActEngine<'a> {
                 // Contrainte 5 : Interruption propre de la boucle ReAct si une action humaine est requise
                 if let Some(action) = interrupt_action {
                     let duration_ms = start.elapsed().as_millis();
+                    println!("  ⏸️ [GOUVERNANCE IDE] Interruption (awaiting_approval:{}, {}ms)", action, duration_ms);
                     self.conn.execute(
                         "UPDATE runs SET status = 'awaiting_approval', completed_at = CURRENT_TIMESTAMP, duration_ms = ?1, total_tokens = ?2 WHERE id = ?3",
                         params![duration_ms as i64, total_tokens as i64, run_id],
@@ -657,6 +730,18 @@ impl<'a> ReActEngine<'a> {
         }
 
         let duration_ms = start.elapsed().as_millis();
+
+        if final_answer.is_empty() {
+            final_answer = format!(
+                "⚠️ Limite de {} étapes atteinte sans réponse finale. Tu peux me demander de continuer.",
+                self.max_steps
+            );
+            self.record_trace(&run_id, step_order, "answer", None, &final_answer);
+            on_trace(&run_id, step_order, "answer", None, &final_answer, &active_backend_name);
+            println!("  ⚠️ [GOUVERNANCE IDE] Limite max_steps ({}) atteinte ({}ms)", self.max_steps, duration_ms);
+        } else {
+            println!("  ✅ [GOUVERNANCE IDE] Run terminé ({} étapes, {}ms)", step_order, duration_ms);
+        }
 
         self.conn.execute(
             "UPDATE runs SET status = 'success', completed_at = CURRENT_TIMESTAMP, duration_ms = ?1, total_tokens = ?2 WHERE id = ?3",
@@ -807,5 +892,26 @@ impl<'a> SubAgentRunner<'a> {
         }
 
         Ok(final_report)
+    }
+}
+
+/// Compresse les messages intermédiaires si le contexte dépasse `max_chars`
+/// tout en préservant le prompt système, la requête initiale et les 6 derniers tours.
+fn compact_messages_if_needed(messages: &mut Vec<ChatMessage>, max_chars: usize) {
+    let total_chars: usize = messages.iter().map(|m| m.content.len()).sum();
+    if total_chars <= max_chars || messages.len() <= 8 {
+        return;
+    }
+    let keep_tail = 6;
+    let split_idx = messages.len().saturating_sub(keep_tail);
+    for msg in messages.iter_mut().take(split_idx).skip(2) {
+        if msg.content.len() > 600 {
+            let preview: String = msg.content.chars().take(450).collect();
+            msg.content = format!(
+                "{}\n... [Contexte compressé : {} caractères omis]",
+                preview,
+                msg.content.len().saturating_sub(450)
+            );
+        }
     }
 }

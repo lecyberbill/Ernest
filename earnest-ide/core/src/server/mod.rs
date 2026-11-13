@@ -1380,6 +1380,37 @@ Garde l'indentation appropriée.";
             return;
         }
 
+        // --- GOUVERNANCE : CHANGEMENT DE MODE MANUEL ---
+        if path == "/api/ide/governance/set_mode" {
+            let root_str = payload["root"].as_str().unwrap_or(".");
+            let mode_str = payload["mode"].as_str().unwrap_or("architecture");
+            let root_path = PathBuf::from(root_str);
+            let pm = crate::governance::PolicyManager::new(&root_path);
+            let mut policy = pm.load_or_init(None).unwrap_or_default();
+            policy.mode = match mode_str {
+                "normal" => crate::governance::GovernanceMode::Normal,
+                "constrained" => crate::governance::GovernanceMode::Constrained,
+                _ => crate::governance::GovernanceMode::Architecture,
+            };
+            match pm.save(&policy) {
+                Ok(_) => {
+                    let resp = Response::from_string(serde_json::json!({
+                        "status": "ok",
+                        "mode": policy.mode
+                    }).to_string()).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+                Err(e) => {
+                    let resp = Response::from_string(serde_json::json!({
+                        "status": "error",
+                        "error": format!("Erreur sauvegarde policy: {}", e)
+                    }).to_string()).with_status_code(500).with_header(json_header).with_header(cors_header);
+                    req.respond(resp).ok();
+                }
+            }
+            return;
+        }
+
         // --- GOUVERNANCE PAR INVARIANTS : APPROBATION REVUE ARCHITECTURE (Mode 3 -> Mode 2) ---
         if path == "/api/ide/governance/review_approve" {
             let root_str = payload["root"].as_str().unwrap_or(".");

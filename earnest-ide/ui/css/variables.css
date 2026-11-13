@@ -1,30 +1,30 @@
 :root {
-    /* Palette Stitch Cyberpunk Contrôlé / Cockpit d'Ingénierie */
-    --surface-lowest: #060e20;
-    --surface-dim: #0b1326;
-    --surface-low: #131b2e;
-    --surface: #0b1326;
-    --surface-container: #171f33;
-    --surface-high: #222a3d;
-    --surface-highest: #2d3449;
-    --surface-bright: #31394d;
+    /* Palette Obsidian / Noir Pur Professionnel (adaptée depuis Stitch) */
+    --surface-lowest: #050507;
+    --surface-dim: #09090b;
+    --surface-low: #101014;
+    --surface: #09090b;
+    --surface-container: #141418;
+    --surface-high: #1c1c21;
+    --surface-highest: #25252b;
+    --surface-bright: #2e2e36;
 
-    --bg-base: #060e20;
-    --bg-surface: #0b1326;
-    --bg-surface-elevated: #171f33;
-    --bg-surface-glass: rgba(19, 27, 46, 0.85);
+    --bg-base: #050507;
+    --bg-surface: #09090b;
+    --bg-surface-elevated: #141418;
+    --bg-surface-glass: rgba(16, 16, 20, 0.88);
 
     /* Textes & Signaux */
-    --on-surface: #dae2fd;
-    --on-surface-variant: #c7c4d7;
-    --outline: #908fa0;
-    --outline-variant: #464554;
-    --border-subtle: rgba(70, 69, 84, 0.4);
+    --on-surface: #f4f4f5;
+    --on-surface-variant: #a1a1aa;
+    --outline: #71717a;
+    --outline-variant: #3f3f46;
+    --border-subtle: rgba(255, 255, 255, 0.08);
     --border-accent: rgba(128, 131, 255, 0.35);
 
-    --text-primary: #dae2fd;
-    --text-secondary: #c7c4d7;
-    --text-muted: #908fa0;
+    --text-primary: #f4f4f5;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
 
     /* Accents Sémantiques */
     --primary: #c0c1ff;

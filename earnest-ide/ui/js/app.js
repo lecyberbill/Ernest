@@ -257,7 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function initMonaco(callback) {
         const origin = window.location.origin;
         window.MonacoEnvironment = {
-            getWorkerUrl: function(moduleId, label) {
+            getWorkerUrl: function (moduleId, label) {
                 if (label === 'typescript' || label === 'javascript') {
                     const tsWorker = `
                         self.MonacoEnvironment = { baseUrl: '${origin}/js/vendor/monaco/' };
@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         require.config({ paths: { 'vs': '/js/vendor/monaco/vs' } });
-        require(['vs/editor/editor.main', 'vs/language/typescript/tsMode'], function() {
+        require(['vs/editor/editor.main'], function () {
             // Configuration TypeScript / JavaScript avancée (IntelliSense, JSX, ESNext)
             if (monaco.languages.typescript) {
                 monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
@@ -315,7 +315,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     minimap: { enabled: true },
                     lineNumbers: 'on',
                     scrollBeyondLastLine: false,
-                    tabSize: 4
+                    tabSize: 4,
+                    inlineSuggest: { enabled: true }
                 });
 
                 editorInstance.onDidChangeCursorPosition((e) => {
@@ -351,13 +352,66 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function registerUniversalLspProviders() {
+        // P2 : Ghost Text / Inline Completion IA (Cursor-like)
+        let ghostDebounceTimer = null;
+        monaco.languages.registerInlineCompletionsProvider({ pattern: '**' }, {
+            provideInlineCompletions: function (model, position, context, token) {
+                return new Promise((resolve) => {
+                    if (ghostDebounceTimer) clearTimeout(ghostDebounceTimer);
+                    ghostDebounceTimer = setTimeout(async () => {
+                        if (token.isCancellationRequested) return resolve({ items: [] });
+                        try {
+                            const lineText = model.getLineContent(position.lineNumber);
+                            const prefix = lineText.slice(0, position.column - 1);
+                            if (prefix.trim().length < 3) return resolve({ items: [] });
+
+                            const tab = getActiveTab();
+                            const startLine = Math.max(1, position.lineNumber - 25);
+                            const contextCode = model.getValueInRange({
+                                startLineNumber: startLine,
+                                startColumn: 1,
+                                endLineNumber: position.lineNumber,
+                                endColumn: position.column
+                            });
+
+                            const res = await fetch('/api/ide/ai/inline_edit', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    prompt: 'Complete the code right after the cursor. Output ONLY the missing code continuation (1-3 lines max), no markdown fences, no explanation.',
+                                    file_path: tab ? tab.path : 'snippet.txt',
+                                    selected_code: '',
+                                    entire_content: contextCode
+                                })
+                            });
+                            if (token.isCancellationRequested) return resolve({ items: [] });
+                            const data = await res.json();
+                            if (data.status === 'success' && data.replacement) {
+                                const clean = data.replacement.replace(/^```[\w]*\n?/, '').replace(/```$/, '');
+                                if (clean.trim().length > 0) {
+                                    return resolve({
+                                        items: [{
+                                            insertText: clean,
+                                            range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column)
+                                        }]
+                                    });
+                                }
+                            }
+                        } catch (e) { }
+                        resolve({ items: [] });
+                    }, 500);
+                });
+            },
+            freeInlineCompletions: function () { }
+        });
+
         const supportedLangs = ['python', 'rust', 'html', 'css', 'json', 'shell', 'sql', 'markdown'];
 
         supportedLangs.forEach(lang => {
             // 1. Completion Provider (Autocomplétion intelligente via backend LSP & indexer)
             monaco.languages.registerCompletionItemProvider(lang, {
                 triggerCharacters: ['.', ':', '>', '/', '_'],
-                provideCompletionItems: async function(model, position) {
+                provideCompletionItems: async function (model, position) {
                     const tab = getActiveTab();
                     const filePath = tab ? tab.path : `file.${lang}`;
                     const code = model.getValue();
@@ -412,7 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 2. Hover Provider (Documentation au survol)
             monaco.languages.registerHoverProvider(lang, {
-                provideHover: async function(model, position) {
+                provideHover: async function (model, position) {
                     const tab = getActiveTab();
                     const filePath = tab ? tab.path : `file.${lang}`;
                     const code = model.getValue();
@@ -436,14 +490,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                 contents: data.contents.map(c => ({ value: c }))
                             };
                         }
-                    } catch (e) {}
+                    } catch (e) { }
                     return null;
                 }
             });
 
             // 3. Definition Provider (F12 / Ctrl+Click Aller à la définition)
             monaco.languages.registerDefinitionProvider(lang, {
-                provideDefinition: async function(model, position) {
+                provideDefinition: async function (model, position) {
                     const tab = getActiveTab();
                     const filePath = tab ? tab.path : `file.${lang}`;
                     const code = model.getValue();
@@ -481,7 +535,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 range: new monaco.Range(targetLine, targetCol, targetLine, targetCol + symbol.length)
                             };
                         }
-                    } catch (e) {}
+                    } catch (e) { }
                     return null;
                 }
             });
@@ -489,7 +543,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // 4. Signature Help Provider (Assistance aux paramètres lors de la frappe d'appels '(' ou ',')
             monaco.languages.registerSignatureHelpProvider(lang, {
                 signatureHelpTriggerCharacters: ['(', ','],
-                provideSignatureHelp: async function(model, position) {
+                provideSignatureHelp: async function (model, position) {
                     const tab = getActiveTab();
                     const filePath = tab ? tab.path : `file.${lang}`;
                     const code = model.getValue();
@@ -517,10 +571,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                         parameters: (s.parameters || []).map(p => ({ label: p }))
                                     }))
                                 },
-                                dispose: () => {}
+                                dispose: () => { }
                             };
                         }
-                    } catch (e) {}
+                    } catch (e) { }
                     return null;
                 }
             });
@@ -588,13 +642,15 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await res.json();
             if (data.status === 'success' && data.replacement) {
-                // Remplacement chirurgical dans Monaco
+                // Remplacement chirurgical dans Monaco avec revue Accepter / Rejeter (P3)
+                const originalText = selectedText;
                 editorInstance.executeEdits('inline-ai', [{
                     range: selection,
                     text: data.replacement,
                     forceMoveMarkers: true
                 }]);
                 inlineAiWidget.classList.remove('visible');
+                showInlineDiffReviewBar(originalText);
             } else {
                 alert(`Erreur IA Inline : ${data.error || 'Aucun remplacement généré'}`);
             }
@@ -605,6 +661,32 @@ document.addEventListener('DOMContentLoaded', () => {
             btnInlineAiSubmit.disabled = false;
         }
     });
+
+    function showInlineDiffReviewBar() {
+        let bar = document.getElementById('inline-diff-review-bar');
+        if (bar) bar.remove();
+        bar = document.createElement('div');
+        bar.id = 'inline-diff-review-bar';
+        bar.style.cssText = `
+            position: absolute; top: 46px; right: 24px; z-index: 950;
+            background: #161b22; border: 1px solid var(--accent-cyan);
+            border-radius: 6px; padding: 6px 10px; display: flex; align-items: center; gap: 8px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.5); font-size: 0.76rem;
+        `;
+        bar.innerHTML = `
+            <span style="color: var(--accent-cyan); font-weight: 600;">⚡ Modification IA appliquée</span>
+            <button id="btn-review-accept" style="background: rgba(16,185,129,0.2); color: #34d399; border: 1px solid #34d399; border-radius: 4px; padding: 2px 8px; cursor: pointer;">✓ Accepter</button>
+            <button id="btn-review-reject" style="background: rgba(244,63,94,0.2); color: #fb7185; border: 1px solid #fb7185; border-radius: 4px; padding: 2px 8px; cursor: pointer;">✕ Rejeter (Ctrl+Z)</button>
+        `;
+        const wrapper = document.getElementById('editor-section-wrapper');
+        if (wrapper) wrapper.appendChild(bar);
+
+        bar.querySelector('#btn-review-accept').addEventListener('click', () => bar.remove());
+        bar.querySelector('#btn-review-reject').addEventListener('click', () => {
+            if (editorInstance) editorInstance.trigger('inline-ai', 'undo', null);
+            bar.remove();
+        });
+    }
 
     inlineAiInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') btnInlineAiSubmit.click();
@@ -623,7 +705,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.openTabs.forEach(tab => {
             const tabEl = document.createElement('div');
             tabEl.className = `editor-tab ${tab.path === state.activeTabPath ? 'active' : ''} ${tab.isModified ? 'modified' : ''}`;
-            
+
             const titleSpan = document.createElement('span');
             titleSpan.textContent = tab.name;
             titleSpan.title = tab.path;
@@ -659,7 +741,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const fileName = normalizedPath.split('/').pop();
                 const lang = getMonacoLanguage(normalizedPath);
-                
+
                 let monacoModel = null;
                 if (window.monaco) {
                     monacoModel = monaco.editor.createModel(data.content || '', lang);
@@ -704,6 +786,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tab.monacoModel = monaco.editor.createModel(tab.content, lang);
             }
             editorInstance.setModel(tab.monacoModel);
+            editorInstance.layout();
             statusLang.textContent = getMonacoLanguage(tab.path).toUpperCase();
             if (state.isDiffMode) updateDiffModels();
         }
@@ -762,6 +845,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (state.isDiffMode) updateDiffModels();
                 refreshGitStatus();
                 refreshDiagnostics();
+                runIdeHooks('on_after_save', tab.path);
 
                 btnSaveFile.textContent = 'Sauvegardé ✓';
                 setTimeout(resetBtn, 1000);
@@ -776,6 +860,43 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     btnSaveFile.addEventListener('click', saveCurrentFile);
+
+    async function runIdeHooks(eventName, filePath) {
+        try {
+            const res = await fetch('/api/ide/file?path=.ide/hooks.json');
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data.content) return;
+            const hooksConfig = JSON.parse(data.content);
+            const hooks = hooksConfig[eventName];
+            if (!Array.isArray(hooks)) return;
+
+            for (const hook of hooks) {
+                if (hook.pattern && !new RegExp(hook.pattern).test(filePath)) continue;
+                if (!hook.command) continue;
+                const cmd = hook.command.replace(/\{file\}/g, filePath);
+                if (terminalOutput1) {
+                    const info = document.createElement('div');
+                    info.style.color = 'var(--accent-amber)';
+                    info.textContent = `[Hook ${eventName}] > ${cmd}`;
+                    terminalOutput1.appendChild(info);
+                }
+                const execRes = await fetch('/api/ide/terminal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: cmd })
+                });
+                const execData = await execRes.json();
+                if (terminalOutput1 && (execData.stdout || execData.stderr)) {
+                    const out = document.createElement('pre');
+                    out.style.cssText = 'margin:2px 0; white-space:pre-wrap; font-size:0.72rem; color:var(--text-secondary);';
+                    out.textContent = (execData.stdout || '') + (execData.stderr || '');
+                    terminalOutput1.appendChild(out);
+                    terminalOutput1.scrollTop = terminalOutput1.scrollHeight;
+                }
+            }
+        } catch (_) { }
+    }
 
     btnToggleDiff.addEventListener('click', () => {
         state.isDiffMode = !state.isDiffMode;
@@ -988,7 +1109,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 prefEditorTabSize.value = data.editor_tab_size;
                 if (editorInstance) editorInstance.updateOptions({ tabSize: parseInt(data.editor_tab_size) });
             }
-        } catch (e) {}
+        } catch (e) { }
     }
 
     function renderModelsList() {
@@ -1183,7 +1304,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(`/api/ide/all_files?root=${encodeURIComponent(state.currentRoot)}`);
             const data = await res.json();
             state.allProjectFiles = (data.files || []).filter(f => !f.is_dir);
-        } catch (e) {}
+        } catch (e) { }
     }
 
     function openQuickOpenPalette() {
@@ -1338,7 +1459,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }));
                 monaco.editor.setModelMarkers(model, 'earnest-linter', fileMarkers);
             }
-        } catch (e) {}
+        } catch (e) { }
     }
 
     btnGitCommit.addEventListener('click', async () => {
@@ -1399,7 +1520,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:2px;">${escapeHtml(diag.message)}</div>
                     <div style="font-size:0.65rem; color:var(--text-muted); font-family:var(--font-mono); margin-top:1px;">${escapeHtml(diag.file)}</div>
                 `;
-                
+
                 const attachEvents = (element) => {
                     // Clic n'importe où sur l'élément : Ouvre le fichier et saute à la ligne
                     element.addEventListener('click', async (e) => {
@@ -1452,7 +1573,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }));
                 monaco.editor.setModelMarkers(model, 'earnest-linter', fileMarkers);
             }
-        } catch (e) {}
+        } catch (e) { }
     }
 
     btnRefreshDiagnostics.addEventListener('click', refreshDiagnostics);
@@ -1749,7 +1870,7 @@ document.addEventListener('DOMContentLoaded', () => {
             openTabsPaths: state.openTabs.map(t => t.path),
             activeTabPath: state.activeTabPath
         };
-        try { localStorage.setItem('earnest_ide_session', JSON.stringify(sessionData)); } catch (e) {}
+        try { localStorage.setItem('earnest_ide_session', JSON.stringify(sessionData)); } catch (e) { }
     }
 
     async function restoreSessionState() {
@@ -1763,7 +1884,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.activeTabPath) switchTab(data.activeTabPath);
                 return true;
             }
-        } catch (e) {}
+        } catch (e) { }
         return false;
     }
 
@@ -1800,6 +1921,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="tree-icon">${entry.is_dir ? (isExpanded ? '📂' : '📁') : '📄'}</span>
                     <span style="flex:1; overflow:hidden; text-overflow:ellipsis;">${entry.name}</span>
                 `;
+
+                row.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    showTreeContextMenu(e.clientX, e.clientY, entry);
+                });
 
                 if (entry.is_dir) {
                     const childrenContainer = document.createElement('div');
@@ -1847,6 +1974,140 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btn-refresh-tree').addEventListener('click', loadTree);
 
+    // Menu contextuel de l'arborescence (P1)
+    let treeCtxMenu = null;
+    function hideTreeContextMenu() {
+        if (treeCtxMenu) {
+            treeCtxMenu.remove();
+            treeCtxMenu = null;
+        }
+    }
+    document.addEventListener('click', hideTreeContextMenu);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') hideTreeContextMenu();
+    });
+
+    function showTreeContextMenu(x, y, entry) {
+        hideTreeContextMenu();
+        const menu = document.createElement('div');
+        menu.id = 'tree-context-menu';
+        menu.style.cssText = `
+            position: fixed; left: ${x}px; top: ${y}px; z-index: 9999;
+            background: #161b22; border: 1px solid var(--border-subtle);
+            border-radius: 6px; padding: 4px 0; min-width: 185px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.45); font-size: 0.78rem;
+            color: var(--text-primary); font-family: var(--font-sans);
+        `;
+
+        const normPath = entry.path.replace(/\\/g, '/');
+        const parentDir = entry.is_dir ? normPath : (normPath.includes('/') ? normPath.slice(0, normPath.lastIndexOf('/')) : '.');
+
+        const addItem = (label, icon, onClick, danger = false) => {
+            const btn = document.createElement('div');
+            btn.style.cssText = `
+                padding: 6px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+                color: ${danger ? 'var(--accent-rose)' : 'var(--text-primary)'};
+            `;
+            btn.innerHTML = `<span>${icon}</span><span>${label}</span>`;
+            btn.addEventListener('mouseenter', () => btn.style.background = 'rgba(99, 102, 241, 0.15)');
+            btn.addEventListener('mouseleave', () => btn.style.background = 'transparent');
+            btn.addEventListener('click', async (ev) => {
+                ev.stopPropagation();
+                hideTreeContextMenu();
+                await onClick();
+            });
+            menu.appendChild(btn);
+        };
+
+        const addSep = () => {
+            const sep = document.createElement('div');
+            sep.style.cssText = 'height: 1px; background: var(--border-subtle); margin: 4px 0;';
+            menu.appendChild(sep);
+        };
+
+        addItem('Nouveau fichier', '📄', async () => {
+            const name = prompt(`Nom du nouveau fichier dans "${parentDir}" :`);
+            if (!name || !name.trim()) return;
+            const target = parentDir === '.' ? name.trim() : `${parentDir}/${name.trim()}`;
+            const res = await fetch('/api/ide/create_item', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: target, is_dir: false })
+            });
+            const data = await res.json();
+            if (data.error) return alert(`Erreur: ${data.error}`);
+            if (entry.is_dir) state.expandedDirs.add(entry.path);
+            await loadTree();
+            await openFile(target);
+        });
+
+        addItem('Nouveau dossier', '📁', async () => {
+            const name = prompt(`Nom du nouveau dossier dans "${parentDir}" :`);
+            if (!name || !name.trim()) return;
+            const target = parentDir === '.' ? name.trim() : `${parentDir}/${name.trim()}`;
+            const res = await fetch('/api/ide/create_item', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: target, is_dir: true })
+            });
+            const data = await res.json();
+            if (data.error) return alert(`Erreur: ${data.error}`);
+            if (entry.is_dir) state.expandedDirs.add(entry.path);
+            await loadTree();
+        });
+
+        addSep();
+
+        addItem('Renommer', '✏️', async () => {
+            const newName = prompt('Nouveau nom :', entry.name);
+            if (!newName || !newName.trim() || newName.trim() === entry.name) return;
+            const target = parentDir === '.' ? newName.trim() : `${parentDir}/${newName.trim()}`;
+            const res = await fetch('/api/ide/rename', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ old_path: normPath, new_path: target })
+            });
+            const data = await res.json();
+            if (data.error) return alert(`Erreur: ${data.error}`);
+            const openTab = state.openTabs.find(t => t.path === normPath);
+            if (openTab) {
+                openTab.path = target;
+                openTab.name = newName.trim();
+                if (state.activeTabPath === normPath) state.activeTabPath = target;
+                renderTabs();
+            }
+            await loadTree();
+        });
+
+        addItem('Copier le chemin', '📋', async () => {
+            try {
+                await navigator.clipboard.writeText(normPath);
+            } catch (e) {
+                prompt('Chemin :', normPath);
+            }
+        });
+
+        addSep();
+
+        addItem('Supprimer', '🗑️', async () => {
+            if (!confirm(`Supprimer définitivement "${normPath}" ?`)) return;
+            const res = await fetch('/api/ide/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: normPath })
+            });
+            const data = await res.json();
+            if (data.error) return alert(`Erreur: ${data.error}`);
+            if (state.openTabs.some(t => t.path === normPath)) {
+                closeTab(normPath);
+            }
+            await loadTree();
+        }, true);
+
+        document.body.appendChild(menu);
+        treeCtxMenu = menu;
+    }
+
     // ====================================================
     // 10. ASSISTANT RE-ACT COPILOTE / PAIR PROGRAMMER
     // ====================================================
@@ -1887,14 +2148,49 @@ document.addEventListener('DOMContentLoaded', () => {
             gap: 0.5rem;
         `;
         assistantBubble.innerHTML = `<div style="color:var(--accent-cyan); font-weight:600;">⚡ Earnest Copilote réfléchit...</div>`;
+        const hbEl = document.createElement('div');
+        hbEl.className = 'agent-heartbeat';
+        hbEl.style.cssText = 'font-size:0.75rem; color:var(--text-muted); font-style:italic; margin-top:0.25rem;';
+        hbEl.textContent = '⏳ En cours… (0s)';
+        assistantBubble.appendChild(hbEl);
+        const hbStart = Date.now();
+        const hbTimer = setInterval(() => {
+            const sec = Math.floor((Date.now() - hbStart) / 1000);
+            if (!hbEl.isConnected) {
+                assistantBubble.appendChild(hbEl);
+            }
+            hbEl.textContent = `⏳ En cours… (${sec}s)`;
+        }, 1000);
         chatStream.appendChild(assistantBubble);
         chatStream.scrollTop = chatStream.scrollHeight;
 
         try {
+            // P5 : Résolution des @mentions de fichiers dans le prompt
+            let enrichedPrompt = text;
+            const mentionMatches = [...text.matchAll(/@([^\s@]+)/g)].map(m => m[1]);
+            if (mentionMatches.length > 0) {
+                const uniqueMentions = [...new Set(mentionMatches)];
+                const attachedContexts = [];
+                for (const mPath of uniqueMentions) {
+                    try {
+                        const fRes = await fetch(`/api/ide/file?path=${encodeURIComponent(mPath)}`);
+                        if (fRes.ok) {
+                            const fData = await fRes.json();
+                            if (fData.content !== undefined) {
+                                attachedContexts.push(`\n--- Contenu de @${mPath} ---\n\`\`\`\n${fData.content.slice(0, 12000)}\n\`\`\``);
+                            }
+                        }
+                    } catch (_) { }
+                }
+                if (attachedContexts.length > 0) {
+                    enrichedPrompt = `${text}\n\n[Fichiers mentionnés]${attachedContexts.join('\n')}`;
+                }
+            }
+
             const res = await fetch('/api/ide/run/stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: text, project: state.currentRoot || 'earnest_ide_workspace' })
+                body: JSON.stringify({ prompt: enrichedPrompt, project: state.currentRoot || 'earnest_ide_workspace' })
             });
 
             if (!res.ok) {
@@ -1918,23 +2214,65 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!dataLine) continue;
                     try {
                         const payload = JSON.parse(dataLine.replace('data: ', ''));
+                        if (payload.backend) {
+                            const modelBadge = document.getElementById('status-active-model');
+                            if (modelBadge) modelBadge.textContent = `Modèle : ${payload.backend}`;
+                        }
 
                         // Événement d'exécution d'outil ou étape de pensée
                         if (payload.step_type === 'thought') {
                             const thoughtDiv = document.createElement('div');
                             thoughtDiv.style.color = 'var(--text-muted)';
                             thoughtDiv.style.fontStyle = 'italic';
-                            thoughtDiv.textContent = `💭 ${payload.payload}`;
+                            const rawThought = `💭 ${payload.payload || ''}`;
+                            const contentEl = document.createElement('div');
+                            contentEl.className = 'markdown-body';
+                            contentEl.innerHTML = typeof marked !== 'undefined' ? marked.parse(rawThought) : escapeHtml(rawThought);
+                            thoughtDiv.appendChild(contentEl);
+
+                            if (rawThought.split('\n').length > 10 || rawThought.length > 600) {
+                                contentEl.style.maxHeight = '14em';
+                                contentEl.style.overflow = 'hidden';
+                                const toggleBtn = document.createElement('button');
+                                toggleBtn.textContent = '+ Voir plus';
+                                toggleBtn.style.cssText = 'background:none; border:1px solid var(--border-subtle); color:var(--accent-cyan); font-size:0.72rem; padding:2px 8px; border-radius:4px; cursor:pointer; margin-top:4px;';
+                                toggleBtn.addEventListener('click', () => {
+                                    const expanded = contentEl.style.maxHeight === 'none';
+                                    contentEl.style.maxHeight = expanded ? '14em' : 'none';
+                                    toggleBtn.textContent = expanded ? '+ Voir plus' : '- Réduire';
+                                });
+                                thoughtDiv.appendChild(toggleBtn);
+                            }
                             assistantBubble.appendChild(thoughtDiv);
                         } else if (payload.step_type === 'tool_call' || payload.step_type === 'action') {
                             const actionDiv = document.createElement('div');
-                            actionDiv.style.cssText = 'color:var(--accent-amber); font-weight:600; padding:2px 6px; background:rgba(245,158,11,0.1); border-radius:3px;';
-                            actionDiv.textContent = `⚙️ Outil : ${payload.tool_name} (${payload.payload})`;
+                            actionDiv.style.cssText = 'color:#fde68a; font-weight:500; font-size:0.8rem; padding:4px 8px; background:rgba(253,230,138,0.06); border-left:2px solid rgba(253,230,138,0.35); border-radius:3px;';
+                            const rawAction = `⚙️ Outil : ${payload.tool_name} (${payload.payload || ''})`;
+                            const actionText = document.createElement('div');
+                            actionText.textContent = rawAction;
+                            actionDiv.appendChild(actionText);
+
+                            if (rawAction.length > 220 || rawAction.split('\n').length > 3) {
+                                actionText.style.maxHeight = '4.5em';
+                                actionText.style.overflow = 'hidden';
+                                const toggleBtn = document.createElement('button');
+                                toggleBtn.textContent = '+ Voir plus';
+                                toggleBtn.style.cssText = 'background:none; border:1px solid rgba(253,230,138,0.3); color:#fde68a; font-size:0.7rem; padding:1px 7px; border-radius:4px; cursor:pointer; margin-top:4px;';
+                                toggleBtn.addEventListener('click', () => {
+                                    const expanded = actionText.style.maxHeight === 'none';
+                                    actionText.style.maxHeight = expanded ? '4.5em' : 'none';
+                                    toggleBtn.textContent = expanded ? '+ Voir plus' : '- Réduire';
+                                });
+                                actionDiv.appendChild(toggleBtn);
+                            }
                             assistantBubble.appendChild(actionDiv);
                         } else if (payload.step_type === 'tool_output') {
                             // Interception des interruptions d'approbation asynchrone (Contrainte 5)
                             try {
                                 const outObj = JSON.parse(payload.payload);
+                                if (outObj.merged_to_workspace && typeof loadTree === 'function') {
+                                    loadTree();
+                                }
                                 if (outObj.status === 'awaiting_approval') {
                                     if (outObj.action === 'architecture_review') {
                                         openGovernanceApproval({
@@ -1947,7 +2285,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                             type: 'contract_mutation',
                                             target_contract_id: outObj.target_contract_id,
                                             reason: outObj.reason,
-                                            diff: outObj.diff
+                                            diff: outObj.diff,
+                                            updated_probes: outObj.updated_probes
                                         });
                                     } else if (outObj.action === 'checkpoint_status') {
                                         openGovernanceApproval({
@@ -1958,13 +2297,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                         });
                                     }
                                 }
-                            } catch (_) {}
+                            } catch (_) { }
                         } else if (payload.status === 'completed' || (payload.status && payload.status.startsWith('awaiting_approval'))) {
                             // Réponse finale terminée ou interrompue pour approbation
                             const finalAnswer = document.createElement('div');
+                            finalAnswer.className = 'markdown-body';
                             finalAnswer.style.color = 'var(--text-primary)';
-                            finalAnswer.style.whiteSpace = 'pre-wrap';
-                            finalAnswer.textContent = payload.answer || 'Tâche terminée avec succès.';
+                            const ansText = payload.answer || 'Tâche terminée avec succès.';
+                            finalAnswer.innerHTML = typeof marked !== 'undefined' ? marked.parse(ansText) : escapeHtml(ansText);
                             assistantBubble.appendChild(finalAnswer);
 
                             const metaDiv = document.createElement('div');
@@ -1982,13 +2322,15 @@ document.addEventListener('DOMContentLoaded', () => {
                             errDiv.textContent = `⚠️ Erreur : ${payload.error}`;
                             assistantBubble.appendChild(errDiv);
                         }
-                    } catch (e) {}
+                    } catch (e) { }
                     chatStream.scrollTop = chatStream.scrollHeight;
                 }
             }
         } catch (err) {
             assistantBubble.innerHTML = `<div style="color:var(--accent-rose);">❌ Erreur d'exécution Copilote: ${escapeHtml(err.message)}</div>`;
         } finally {
+            clearInterval(hbTimer);
+            hbEl.remove();
             btnAgentSend.disabled = false;
         }
     }
@@ -1997,9 +2339,66 @@ document.addEventListener('DOMContentLoaded', () => {
         btnAgentSend.addEventListener('click', executeAgentPrompt);
     }
     if (agentPrompt) {
+        let mentionPopup = null;
+        function closeMentionPopup() {
+            if (mentionPopup) {
+                mentionPopup.remove();
+                mentionPopup = null;
+            }
+        }
+
+        agentPrompt.addEventListener('input', () => {
+            const val = agentPrompt.value;
+            const cursor = agentPrompt.selectionStart || val.length;
+            const before = val.slice(0, cursor);
+            const match = before.match(/@([^\s@]*)$/);
+            if (!match) return closeMentionPopup();
+
+            const query = match[1].toLowerCase();
+            const matches = (state.allProjectFiles || [])
+                .filter(f => f.path.toLowerCase().includes(query))
+                .slice(0, 8);
+
+            if (matches.length === 0) return closeMentionPopup();
+
+            closeMentionPopup();
+            mentionPopup = document.createElement('div');
+            mentionPopup.id = 'agent-mention-popup';
+            const rect = agentPrompt.getBoundingClientRect();
+            mentionPopup.style.cssText = `
+                position: fixed; left: ${rect.left}px; bottom: ${window.innerHeight - rect.top + 6}px;
+                width: ${Math.max(rect.width, 280)}px; max-height: 220px; overflow-y: auto;
+                background: #161b22; border: 1px solid var(--accent-cyan); border-radius: 6px;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.5); z-index: 9999; font-size: 0.75rem;
+            `;
+            matches.forEach(f => {
+                const item = document.createElement('div');
+                item.style.cssText = 'padding: 6px 10px; cursor: pointer; color: var(--text-primary); border-bottom: 1px solid rgba(255,255,255,0.04);';
+                item.textContent = `📄 ${f.path.replace(/\\/g, '/')}`;
+                item.addEventListener('mouseenter', () => item.style.background = 'rgba(99,102,241,0.2)');
+                item.addEventListener('mouseleave', () => item.style.background = 'transparent');
+                item.addEventListener('mousedown', (ev) => {
+                    ev.preventDefault();
+                    const cleanPath = f.path.replace(/\\/g, '/');
+                    const prefix = before.slice(0, match.index);
+                    const suffix = val.slice(cursor);
+                    agentPrompt.value = `${prefix}@${cleanPath} ${suffix}`;
+                    closeMentionPopup();
+                    agentPrompt.focus();
+                });
+                mentionPopup.appendChild(item);
+            });
+            document.body.appendChild(mentionPopup);
+        });
+
         agentPrompt.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeMentionPopup();
+                return;
+            }
             if (e.key === 'Enter') {
                 e.preventDefault();
+                closeMentionPopup();
                 executeAgentPrompt();
             }
         });
@@ -2011,7 +2410,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!agentHistoryPane) return;
         agentHistoryPane.innerHTML = '<div style="color:var(--text-muted); padding:0.25rem;">Chargement historique...</div>';
         try {
-            const res = await fetch('/api/ide/history?project=earnest_ide_workspace');
+            const projKey = encodeURIComponent(state.currentRoot || state.currentProjectName || 'earnest_ide_workspace');
+            const res = await fetch(`/api/ide/history?project=${projKey}`);
             const runs = await res.json();
             agentHistoryPane.innerHTML = '';
 
@@ -2144,7 +2544,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/ide/projects');
             state.projects = await res.json();
             renderProjectsModal();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     function renderProjectsModal() {
@@ -2193,6 +2593,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ id: p.id })
                     });
+                    if (state.currentProjectId === p.id) {
+                        state.currentProjectId = null;
+                        state.currentProjectName = null;
+                        state.currentRoot = '.';
+                        if (topProjectName) topProjectName.textContent = 'Aucun projet';
+                    }
                     loadProjectsList();
                 });
             }
@@ -2364,7 +2770,7 @@ document.addEventListener('DOMContentLoaded', () => {
             govModalBody.innerHTML = `
                 <div style="background: rgba(15, 23, 42, 0.6); padding: 0.75rem; border-radius: 4px; border-left: 3px solid #38bdf8;">
                     <div style="color: #38bdf8; font-weight: 700; margin-bottom: 0.25rem;">Résumé exécutif proposé :</div>
-                    <div>${escapeHtml(approvalData.summary || 'Spécification complète')}</div>
+                    <div class="markdown-body">${typeof marked !== 'undefined' ? marked.parse(approvalData.summary || 'Spécification complète') : escapeHtml(approvalData.summary || 'Spécification complète')}</div>
                 </div>
                 <div style="color: var(--text-muted); font-size: 0.7rem;">
                     Hash calculé : <code>${escapeHtml(approvalData.invariants_hash || 'SHA-256')}</code><br>
@@ -2429,6 +2835,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const d = await res.json();
                     if (d.status === 'SEALED') {
                         alert(`Architecture validée et scellée avec succès ! (Hash : ${d.sealed_hash.substring(0, 16)}...)\nLe projet est maintenant en Mode 2 Contraint.`);
+                    } else {
+                        alert(`Erreur scellement : ${d.error || JSON.stringify(d)}`);
                     }
                 } else if (currentPendingApproval.type === 'contract_mutation') {
                     const res = await fetch('/api/ide/governance/mutation_approve', {
@@ -2438,7 +2846,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             root,
                             target_contract_id: currentPendingApproval.target_contract_id,
                             reason: currentPendingApproval.reason,
-                            diff: currentPendingApproval.diff
+                            diff: currentPendingApproval.diff,
+                            updated_probes: currentPendingApproval.updated_probes
                         })
                     });
                     const d = await res.json();
@@ -2458,21 +2867,63 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 alert(`Erreur validation gouvernance : ${err.message}`);
             } finally {
+                const hadApproval = !!currentPendingApproval;
                 govApprovalModal.classList.remove('open');
                 currentPendingApproval = null;
                 refreshGovernanceStatus();
+                if (hadApproval && agentPrompt) {
+                    agentPrompt.value = "Approbation validée et scellée. Poursuis l'exécution.";
+                    executeAgentPrompt();
+                }
             }
         });
     }
 
     if (govBadge) {
-        govBadge.addEventListener('click', () => {
-            // Afficher le statut de gouvernance
-            fetch(`/api/ide/governance/status?root=${encodeURIComponent(state.currentRoot || '.')}`)
-                .then(r => r.json())
-                .then(d => {
-                    alert(`Statut Gouvernance Earnest :\nMode : ${d.mode}\nContrats : ${d.contracts.count}\nIntégrité : ${d.integrity.status} (${d.integrity.sha256 || 'N/A'})\nJournal d'audit : ${d.audit_entries_count} entrée(s)`);
+        govBadge.addEventListener('click', async () => {
+            const root = state.currentRoot || '.';
+            try {
+                const r = await fetch(`/api/ide/governance/status?root=${encodeURIComponent(root)}`);
+                const d = await r.json();
+                currentPendingApproval = null;
+                govModalTitle.textContent = '🛡️ GOUVERNANCE EARNEST';
+                govModalBadge.textContent = `Mode : ${d.mode}`;
+                govModalBadge.style.background = 'rgba(56, 189, 248, 0.2)';
+                govModalBadge.style.color = '#38bdf8';
+                btnGovApprove.style.display = 'none';
+
+                govModalBody.innerHTML = `
+                    <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                        <div style="background: rgba(15, 23, 42, 0.6); padding: 0.75rem; border-radius: 6px; font-size: 0.85rem; line-height: 1.6;">
+                            <div><strong>Contrats :</strong> ${d.contracts?.count ?? 0}</div>
+                            <div><strong>Intégrité :</strong> ${escapeHtml(d.integrity?.status || 'unknown')} <code>${escapeHtml((d.integrity?.sha256 || 'N/A').slice(0, 16))}</code></div>
+                            <div><strong>Journal d'audit :</strong> ${d.audit_entries_count ?? 0} entrée(s)</div>
+                        </div>
+                        <div style="font-weight:600; font-size:0.85rem;">Basculer de mode :</div>
+                        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                            <button class="btn-mode-switch" data-mode="normal" style="flex:1; padding:0.5rem; border-radius:6px; border:1px solid var(--border-subtle); background:rgba(255,255,255,0.06); color:var(--text-primary); cursor:pointer;">Mode 1 : Normal</button>
+                            <button class="btn-mode-switch" data-mode="constrained" style="flex:1; padding:0.5rem; border-radius:6px; border:1px solid #fbbf24; background:rgba(251,191,36,0.12); color:#fbbf24; cursor:pointer;">Mode 2 : Contraint</button>
+                            <button class="btn-mode-switch" data-mode="architecture" style="flex:1; padding:0.5rem; border-radius:6px; border:1px solid #38bdf8; background:rgba(56,189,248,0.12); color:#38bdf8; cursor:pointer;">Mode 3 : Archi</button>
+                        </div>
+                    </div>
+                `;
+                govModalBody.querySelectorAll('.btn-mode-switch').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const mode = btn.getAttribute('data-mode');
+                        await fetch('/api/ide/governance/set_mode', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ root, mode })
+                        });
+                        govApprovalModal.classList.remove('open');
+                        btnGovApprove.style.display = '';
+                        refreshGovernanceStatus();
+                    });
                 });
+                govApprovalModal.classList.add('open');
+            } catch (e) {
+                console.error('Erreur statut gouvernance:', e);
+            }
         });
     }
 
@@ -2508,7 +2959,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             }
-        } catch (e) {} finally {
+        } catch (e) { } finally {
             isCheckingExternalModifs = false;
         }
     }

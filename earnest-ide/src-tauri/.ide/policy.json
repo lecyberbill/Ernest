@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "mode": "normal",
+  "invariants_file": ".ide/invariants.json",
+  "lock_file": ".ide/invariants.lock",
+  "audit_log": ".ide/audit.log",
+  "shadow_env": {
+    "engine": "git_worktree",
+    "path": ".ide/shadow_worktree",
+    "timeout_ms": 15000
+  },
+  "guardrails": {
+    "max_consecutive_failures": 3,
+    "topological_enforcement": true
+  }
+}

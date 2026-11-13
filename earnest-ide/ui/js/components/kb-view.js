@@ -34,6 +34,9 @@ export class KbView {
                     </div>
 
                     <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <button id="kb-btn-export" class="icon-btn" style="border: 1px solid var(--border-subtle); padding: 5px 10px; font-size: 0.75rem; border-radius: 4px; gap: 4px;" title="Exporter la base en JSON">
+                            <span>💾</span> Exporter
+                        </button>
                         <button id="kb-btn-refresh" class="icon-btn" style="border: 1px solid var(--border-subtle); padding: 5px 10px; font-size: 0.75rem; border-radius: 4px; gap: 4px;" title="Recharger les données">
                             <span>🔄</span> Actualiser
                         </button>
@@ -196,6 +199,17 @@ export class KbView {
         // Refresh
         this.container.querySelector('#kb-btn-refresh').addEventListener('click', () => this.loadEntries());
 
+        // Export JSON
+        this.container.querySelector('#kb-btn-export').addEventListener('click', () => {
+            const blob = new Blob([JSON.stringify(this.entries || [], null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `earnest-bcpe-export-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
         // Pill filters kind
         this.container.querySelectorAll('.kb-pill').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -238,6 +252,13 @@ export class KbView {
 
             if (!title || !correction) {
                 alert("Le titre et la solution sont obligatoires !");
+                return;
+            }
+
+            // Déduplication : vérifier si un titre similaire existe déjà
+            const normTitle = title.toLowerCase();
+            const duplicate = this.entries.find(e => e.title && e.title.toLowerCase() === normTitle);
+            if (duplicate && !confirm(`Une fiche intitulée "${duplicate.title}" existe déjà. Créer quand même ?`)) {
                 return;
             }
 

@@ -78,18 +78,8 @@ impl ShadowRunner {
     pub fn prepare_shadow_worktree(&self) -> Result<(), String> {
         self.ensure_initial_git_commit()?;
 
-        // Si le shadow_worktree existe déjà, on le nettoie ou on le réutilise
-        if self.shadow_path.exists() {
-            // Tenter un reset --hard
-            let _ = Command::new("git")
-                .args(["reset", "--hard", "HEAD"])
-                .current_dir(&self.shadow_path)
-                .output();
-            let _ = Command::new("git")
-                .args(["clean", "-fd"])
-                .current_dir(&self.shadow_path)
-                .output();
-        } else {
+        // Si le shadow_worktree existe déjà, on le réutilise pour accumuler les fichiers du run
+        if !self.shadow_path.exists() {
             if let Some(parent) = self.shadow_path.parent() {
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
@@ -181,7 +171,7 @@ impl ShadowRunner {
     pub fn execute_probe(&self, probe: &ProbeSpec, target_file: &str) -> ProbeRunResult {
         let start = std::time::Instant::now();
         match probe.runner.as_str() {
-            "static_ast" => {
+            "static_ast" | "static" | "ast_grep" => {
                 // Analyse syntaxique AST rapide
                 let target_path = self.shadow_path.join(target_file);
                 let content = fs::read_to_string(&target_path).unwrap_or_default();
@@ -210,7 +200,7 @@ impl ShadowRunner {
                     duration_ms: start.elapsed().as_millis(),
                 }
             }
-            "cli_exec" => {
+            "cli_exec" | "cargo_test" => {
                 let cmd_str = probe.command.as_deref().unwrap_or("echo ok");
                 #[cfg(target_os = "windows")]
                 let mut cmd = {
@@ -226,6 +216,8 @@ impl ShadowRunner {
                 };
 
                 cmd.current_dir(&self.shadow_path);
+                let shared_target = self.workspace_root.join(".ide").join("shadow_target");
+                cmd.env("CARGO_TARGET_DIR", &shared_target);
 
                 match cmd.output() {
                     Ok(out) => {
@@ -234,8 +226,14 @@ impl ShadowRunner {
                         let stdout = String::from_utf8_lossy(&out.stdout).to_string();
                         let stderr = String::from_utf8_lossy(&out.stderr).to_string();
 
-                        let passed = actual_code == expected_code;
-                        let error_message = if !passed {
+                        let zero_tests_trap = expected_code == 0
+                            && stdout.contains("running 0 tests")
+                            && !stdout.contains("1 passed")
+                            && probe.command.as_deref().unwrap_or("").contains("cargo test");
+                        let passed = actual_code == expected_code && !zero_tests_trap;
+                        let error_message = if zero_tests_trap {
+                            Some("Aucun test exécuté (running 0 tests) : un filtre cargo test qui ne matche aucun test est refusé.".to_string())
+                        } else if !passed {
                             Some(format!("Code de sortie: {} (attendu: {}). Stderr: {}", actual_code, expected_code, stderr.trim()))
                         } else {
                             None
@@ -302,11 +300,22 @@ impl ShadowRunner {
     }
 
     /// Exécute l'intégralité du cycle shadow pour un contrat : sandbox -> apply -> probes -> merge/rollback
+    /// Exécute l'ensemble des sondes d'un contrat dans le shadow worktree
     pub fn execute_contract_patch(
         &self,
         contract: &ContractSpec,
         target_file: &str,
         patch: &str,
+    ) -> ShadowExecutionResult {
+        self.execute_contract_patches(contract, &[(target_file, patch)], target_file)
+    }
+
+    /// Exécute l'ensemble des sondes d'un contrat sur un patch multi-fichiers atomique
+    pub fn execute_contract_patches(
+        &self,
+        contract: &ContractSpec,
+        files: &[(&str, &str)],
+        primary_target: &str,
     ) -> ShadowExecutionResult {
         if let Err(e) = self.prepare_shadow_worktree() {
             return ShadowExecutionResult {
@@ -318,14 +327,16 @@ impl ShadowRunner {
             };
         }
 
-        if let Err(e) = self.apply_patch_in_shadow(target_file, patch) {
-            return ShadowExecutionResult {
-                success: false,
-                contract_id: contract.id.clone(),
-                probes: Vec::new(),
-                merged_to_workspace: false,
-                failure_reason: Some(format!("Erreur application patch en sandbox: {}", e)),
-            };
+        for (file_path, patch) in files {
+            if let Err(e) = self.apply_patch_in_shadow(file_path, patch) {
+                return ShadowExecutionResult {
+                    success: false,
+                    contract_id: contract.id.clone(),
+                    probes: Vec::new(),
+                    merged_to_workspace: false,
+                    failure_reason: Some(format!("Erreur application patch en sandbox ({}): {}", file_path, e)),
+                };
+            }
         }
 
         let mut probe_results = Vec::new();
@@ -333,7 +344,7 @@ impl ShadowRunner {
         let mut first_failure = None;
 
         for probe in &contract.probes {
-            let res = self.execute_probe(probe, target_file);
+            let res = self.execute_probe(probe, primary_target);
             if !res.passed {
                 all_passed = false;
                 if first_failure.is_none() {
@@ -344,15 +355,17 @@ impl ShadowRunner {
         }
 
         if all_passed {
-            // Fusion vers le workspace réel
-            if let Err(e) = self.merge_to_workspace(target_file) {
-                return ShadowExecutionResult {
-                    success: false,
-                    contract_id: contract.id.clone(),
-                    probes: probe_results,
-                    merged_to_workspace: false,
-                    failure_reason: Some(format!("Erreur fusion vers projet réel: {}", e)),
-                };
+            // Fusion vers le workspace réel de tous les fichiers modifiés
+            for (file_path, _) in files {
+                if let Err(e) = self.merge_to_workspace(file_path) {
+                    return ShadowExecutionResult {
+                        success: false,
+                        contract_id: contract.id.clone(),
+                        probes: probe_results,
+                        merged_to_workspace: false,
+                        failure_reason: Some(format!("Erreur fusion vers projet réel ({}): {}", file_path, e)),
+                    };
+                }
             }
 
             ShadowExecutionResult {
