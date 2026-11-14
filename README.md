@@ -200,7 +200,7 @@ Ernest/
 To stress-test Earnest IDE from scratch, we tasked **Earnest Copilote** with building a **crash-safe transactional Key-Value engine in pure Rust** (`kv-wal-engine`, zero external dependencies) under intentionally tight resource constraints (36k-char context compaction and 30-step ReAct checkpoints, forcing the agent to rely on `.ide/invariants.json` and disk truth across runs):
 
 - **Base Prompt**:
-  > *"Crée un moteur de stockage clé-valeur transactionnel en Rust (`kv-wal-engine`) avec WAL binaire CRC32 + `fsync`, transactions ACID avec Snapshot Isolation (MVCC + `WriteConflict`), compaction atomique (`.tmp` + `rename` + troncature WAL) et tests de crash-recovery."*
+  > *"Build a transactional key-value storage engine in Rust (`kv-wal-engine`) with a binary CRC32 WAL + `fsync`, ACID transactions with Snapshot Isolation (MVCC + `WriteConflict`), atomic compaction (`.tmp` + `rename` + WAL truncation), and crash-recovery tests."*
 - **Mode 3 → Mode 2 Flow**:
   1. **Mode 3 (`architecture`)**: Earnest Copilote designed 5 modules (`wal.rs`, `engine.rs`, `mvcc.rs`, `snapshot.rs`, `lib.rs`) and sealed **10 contracts (`C1`–`C10`)** in `.ide/invariants.json` + `.ide/invariants.lock` (SHA-256).
   2. **Mode 2 (`constrained`)**: Every patch was compiled and verified inside `.ide/shadow_worktree/` before promotion to the workspace.
