@@ -66,6 +66,11 @@
         if (!TRANSLATIONS[lang]) return;
         currentLang = lang;
         localStorage.setItem('earnest_lang', lang);
+        fetch('/api/ide/kv_state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: 'earnest_lang', value: lang })
+        }).catch(() => {});
         window.applyI18n();
     };
 
@@ -86,5 +91,12 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         window.applyI18n();
+        const langSelect = document.getElementById('pref-ui-lang');
+        if (langSelect) {
+            langSelect.value = currentLang;
+            langSelect.addEventListener('change', (e) => {
+                window.setLang(e.target.value);
+            });
+        }
     });
 })();

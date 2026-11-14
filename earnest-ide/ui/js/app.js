@@ -2634,6 +2634,11 @@ document.addEventListener('DOMContentLoaded', () => {
         state.currentProjectName = proj.name;
         state.currentRoot = proj.root_path || '.';
         localStorage.setItem('earnest_last_project_id', proj.id || proj.name);
+        fetch('/api/ide/kv_state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: 'earnest_last_project_id', value: String(proj.id || proj.name) })
+        }).catch(() => {});
         if (topProjectName) topProjectName.textContent = `Projet : ${proj.name}`;
 
         // Fermer tous les onglets du projet précédent
@@ -2651,12 +2656,28 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshDiagnostics();
         refreshGovernanceStatus();
 
-        // Mettre à jour l'invite du copilote
-        chatStream.innerHTML = `
-            <div class="chat-bubble assistant" style="background: rgba(30, 41, 59, 0.4); border: 1px solid var(--border-subtle); padding: 0.75rem; border-radius: var(--radius-sm); font-size: 0.8rem; line-height: 1.45;">
-                📁 Projet basculé sur <strong>${escapeHtml(proj.name)}</strong> (Racine : <code>${escapeHtml(state.currentRoot)}</code>). Contexte, mémoires et sessions dédiés.
-            </div>
-        `;
+        // Restaurer le dernier historique de chat du projet si disponible
+        let restored = false;
+        try {
+            const pParam = encodeURIComponent(state.currentRoot || state.currentProjectName || 'earnest_ide_workspace');
+            const hRes = await fetch(`/api/ide/history?project=${pParam}`);
+            if (hRes.ok) {
+                const hData = await hRes.json();
+                const runs = hData.runs || [];
+                if (runs.length > 0 && typeof restoreRunTraces === 'function') {
+                    await restoreRunTraces(runs[0].id, runs[0].prompt);
+                    restored = true;
+                }
+            }
+        } catch (e) {}
+
+        if (!restored) {
+            chatStream.innerHTML = `
+                <div class="chat-bubble assistant" style="background: rgba(30, 41, 59, 0.4); border: 1px solid var(--border-subtle); padding: 0.75rem; border-radius: var(--radius-sm); font-size: 0.8rem; line-height: 1.45;">
+                    📁 Switched to <strong>${escapeHtml(proj.name)}</strong> (Root: <code>${escapeHtml(state.currentRoot)}</code>). Dedicated context, memory, and sessions.
+                </div>
+            `;
+        }
 
         saveSessionState();
     }

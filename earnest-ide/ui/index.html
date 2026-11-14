@@ -881,12 +881,12 @@
                         <polyline points="17 21 17 13 7 13 7 21"></polyline>
                         <polyline points="7 3 7 8 15 8"></polyline>
                     </svg>
-                    Sauvegarder (Ctrl+S)
+                    <span data-i18n="btn.save">Save (Ctrl+S)</span>
                 </button>
 
                 <button id="btn-open-settings" class="icon-btn"
                     style="border: 1px solid var(--border-subtle); padding: 4px 8px; border-radius: 4px; gap: 0.4rem;"
-                    title="Préférences de l'application">
+                    title="Preferences">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"></circle>
@@ -894,7 +894,7 @@
                             d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
                         </path>
                     </svg>
-                    <span>Préférences</span>
+                    <span data-i18n="nav.settings">Preferences</span>
                 </button>
             </div>
         </header>
@@ -1144,6 +1144,14 @@
                                         </select>
                                     </div>
                                 </div>
+                                <div style="margin-top: 0.25rem;">
+                                    <label style="display: block; color: var(--text-secondary); margin-bottom: 0.25rem;">Language / Langue</label>
+                                    <select id="pref-ui-lang"
+                                        style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.75rem;">
+                                        <option value="en">English</option>
+                                        <option value="fr">Français</option>
+                                    </select>
+                                </div>
                                 <button id="btn-save-preferences" class="btn-primary"
                                     style="padding: 0.45rem; font-size: 0.75rem; margin-top: 0.25rem;">
                                     Appliquer les réglages
@@ -1326,9 +1334,9 @@
                             PAIR PROGRAMMER
                         </div>
                         <div style="display: flex; gap: 4px;">
-                            <button class="icon-btn" id="btn-toggle-history" title="Historique des sessions"
-                                style="font-size: 0.72rem; color: var(--accent-amber);">📜 Reprendre</button>
-                            <button class="icon-btn" id="btn-clear-agent" style="font-size: 0.72rem;">Nouveau</button>
+                            <button class="icon-btn" id="btn-toggle-history" title="Session History"
+                                style="font-size: 0.72rem; color: var(--accent-amber);" data-i18n="btn.resume">📜 Resume</button>
+                            <button class="icon-btn" id="btn-clear-agent" style="font-size: 0.72rem;" data-i18n="btn.new">New</button>
                         </div>
                     </div>
 
@@ -1340,17 +1348,17 @@
                     <div class="agent-stream" id="agent-chat-stream">
                         <div class="chat-bubble assistant"
                             style="background: rgba(30, 41, 59, 0.4); border: 1px solid var(--border-subtle); padding: 0.75rem; border-radius: var(--radius-sm); font-size: 0.8rem; line-height: 1.45;">
-                            👋 Bienvenue dans <strong>Earnest IDE Pro</strong>. Monaco Editor, Git Control, Command
-                            Palette (`Ctrl+P`), Inline AI (`Ctrl+K`) et Multi-Terminaux sont opérationnels.
+                            👋 Welcome to <strong>Earnest IDE Pro</strong>. Monaco Editor, Git Control, Command
+                            Palette (`Ctrl+P`), Inline AI (`Ctrl+K`), and Multi-Terminals are ready.
                         </div>
                     </div>
 
                     <div class="agent-input-box">
                         <div style="display: flex; gap: 0.5rem;">
-                            <input type="text" id="agent-prompt" placeholder="Consigne de développement..."
+                            <input type="text" id="agent-prompt" data-i18n-placeholder="chat.placeholder" placeholder="Development instruction..."
                                 style="flex: 1; font-size: 0.8rem;" />
                             <button id="btn-agent-send" class="btn-primary"
-                                style="padding: 0.4rem 0.85rem; font-size: 0.78rem;">Exécuter</button>
+                                style="padding: 0.4rem 0.85rem; font-size: 0.78rem;" data-i18n="btn.run">Run</button>
                         </div>
                     </div>
                 </section>
@@ -1367,7 +1375,7 @@
                 <span id="status-problems-count" style="color: var(--accent-amber);">0 Problèmes</span>
             </div>
             <div style="display: flex; gap: 1.25rem; align-items: center;">
-                <span id="status-active-model" style="color: var(--text-secondary);">Modèle : Inconnu</span>
+                <span id="status-active-model" style="color: var(--text-secondary);" data-i18n="status.model_unknown">Model: Unknown</span>
                 <span>Earnest IDE Pro v2.0.0 • Pure Rust + Monaco</span>
             </div>
         </footer>
