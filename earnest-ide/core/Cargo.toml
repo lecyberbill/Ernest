@@ -19,5 +19,6 @@ walkdir = "2.5"
 ignore = "0.4"
 similar = "2.6"
 sha2 = "0.10"
+kv-wal-engine = { path = "../../../kv-wal-engine" }
 
 

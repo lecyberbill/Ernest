@@ -24,8 +24,12 @@
 
 6. **Final Result (`kv-wal-engine`)**
    - **Delivered**: Pure-Rust, zero-dependency transactional KV engine (`wal.rs`, `engine.rs`, `mvcc.rs`, `snapshot.rs`) built under strict Mode 3 → Mode 2 governance.
-   - **Verified**: `cargo test --all-targets` in `D:\Projet\kv-wal-engine` → **23/23 tests passing** (3 unit + 5 `wal_format` + 5 `crash_recovery` + 4 `mvcc_conflict` + 6 `compaction_restart`).
-   - **Additional Fixes**: Raised `max_steps` to `80` (`react.rs`), added `"cli"` runner alias (`shadow.rs`), added dynamic file-tree refresh (`loadTree()`), date+time and click-outside close on history dropdown (`app.js`).
+   - **Verified**: `cargo test --all-targets` in `D:\Projet\kv-wal-engine` → **23/23 tests passing** (3 unit + 5 `wal_format` + 5 `crash_recovery` + 4 `mvcc_conflict` + 6 `compaction_restart`) + `cargo clippy --all-targets -- -D warnings` (**0 warnings**).
+   - **E2E Functional Stress Test (`tests/e2e_functional.rs`)**:
+     - `1,301` durable WAL operations (`1,000` puts + `200` updates + `100` deletes + `1` owned `EngineTransaction`) with `fsync`: **430 ms**.
+     - Simulated crash (corrupt tail `0xDEADBEEF...`) + recovery + atomic snapshot compaction (`.tmp` + `rename` + WAL truncated to `0` bytes): **21 ms**.
+     - Full restart from snapshot + MVCC `WriteConflict` & `CompactionBusy` guards: **100% verified** (total test runtime: **470 ms**).
+   - **Additional Fixes**: Raised `max_steps` to `80` (`react.rs`), dynamic context budget via Ollama `/api/show` & LM Studio `/api/v0/models` (`router.rs`), `.ide/atlas.md` & multi-turn history (`react.rs`), `"cli"` runner alias (`shadow.rs`), dynamic file-tree refresh (`loadTree()`), `localStorage` last-project persistence, date+time and click-outside close on history dropdown (`app.js`).
 
 ## 2. Architectural Choice: IDE as "Guardian of the Temple"
 

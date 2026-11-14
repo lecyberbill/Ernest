@@ -2559,6 +2559,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/ide/projects');
             state.projects = await res.json();
             renderProjectsModal();
+            if (!state.currentProjectId && Array.isArray(state.projects)) {
+                const lastId = localStorage.getItem('earnest_last_project_id');
+                const saved = lastId && state.projects.find(p => p.id === lastId || p.name === lastId);
+                if (saved) {
+                    switchProject(saved);
+                }
+            }
         } catch (e) { }
     }
 
@@ -2626,6 +2633,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.currentProjectId = proj.id;
         state.currentProjectName = proj.name;
         state.currentRoot = proj.root_path || '.';
+        localStorage.setItem('earnest_last_project_id', proj.id || proj.name);
         if (topProjectName) topProjectName.textContent = `Projet : ${proj.name}`;
 
         // Fermer tous les onglets du projet précédent

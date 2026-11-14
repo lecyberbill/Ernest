@@ -135,5 +135,79 @@ impl LLMRouter {
 
         Err(format!("Tous les moteurs LLM ont échoué. Dernière erreur: {}", last_err))
     }
+
+    /// Estime la taille maximale de contexte (en caractères, à ~65% de la fenêtre)
+    /// en interrogeant Ollama / LM Studio si local, ou via le modèle connu.
+    pub fn estimate_context_chars(&self, backend_name: &str) -> usize {
+        let Some(b) = self.backends.iter().find(|b| b.name == backend_name || b.id == backend_name) else {
+            return 120_000;
+        };
+
+        let mut tokens: Option<usize> = None;
+        let base = b.base_url.trim_end_matches('/');
+
+        if let Ok(client) = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_millis(800))
+            .build()
+        {
+            if b.provider_type == "ollama" || base.contains(":11434") {
+                let api_root = base.strip_suffix("/v1").unwrap_or(base);
+                if let Ok(resp) = client
+                    .post(format!("{}/api/show", api_root))
+                    .json(&serde_json::json!({ "name": b.model }))
+                    .send()
+                {
+                    if let Ok(val) = resp.json::<serde_json::Value>() {
+                        if let Some(info) = val.get("model_info").and_then(|v| v.as_object()) {
+                            for (k, v) in info {
+                                if k.ends_with(".context_length") {
+                                    if let Some(n) = v.as_u64() {
+                                        tokens = Some(n as usize);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if base.contains(":1234") {
+                let api_root = base.strip_suffix("/v1").unwrap_or(base);
+                if let Ok(resp) = client.get(format!("{}/api/v0/models", api_root)).send() {
+                    if let Ok(val) = resp.json::<serde_json::Value>() {
+                        if let Some(arr) = val.get("data").and_then(|v| v.as_array()) {
+                            for m in arr {
+                                if m.get("id").and_then(|v| v.as_str()) == Some(b.model.as_str()) {
+                                    tokens = m
+                                        .get("loaded_context_length")
+                                        .or_else(|| m.get("max_context_length"))
+                                        .and_then(|v| v.as_u64())
+                                        .map(|n| n as usize);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let ctx_tokens = tokens.unwrap_or_else(|| {
+            let m = b.model.to_lowercase();
+            if m.contains("gemini") {
+                1_000_000
+            } else if m.contains("qwen") || m.contains("lfm") {
+                256_000
+            } else if m.contains("claude") {
+                200_000
+            } else if m.contains("deepseek") || m.contains("gpt-4") || m.contains("o1") || m.contains("o3") {
+                128_000
+            } else {
+                64_000
+            }
+        });
+
+        // ~3.5 chars/token * 65% de marge de sécurité, minimum 24_000 chars
+        (ctx_tokens.saturating_mul(227) / 100).max(24_000)
+    }
 }
 

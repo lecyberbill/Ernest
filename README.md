@@ -193,6 +193,25 @@ Ernest/
 
 ---
 
+---
+
+## 🏆 Showcase: `kv-wal-engine` Built Under Strict Governance
+
+To stress-test Earnest IDE from scratch, we tasked **Earnest Copilote** with building a **crash-safe transactional Key-Value engine in pure Rust** (`kv-wal-engine`, zero external dependencies) under intentionally tight resource constraints (36k-char context compaction and 30-step ReAct checkpoints, forcing the agent to rely on `.ide/invariants.json` and disk truth across runs):
+
+- **Base Prompt**:
+  > *"Crée un moteur de stockage clé-valeur transactionnel en Rust (`kv-wal-engine`) avec WAL binaire CRC32 + `fsync`, transactions ACID avec Snapshot Isolation (MVCC + `WriteConflict`), compaction atomique (`.tmp` + `rename` + troncature WAL) et tests de crash-recovery."*
+- **Mode 3 → Mode 2 Flow**:
+  1. **Mode 3 (`architecture`)**: Earnest Copilote designed 5 modules (`wal.rs`, `engine.rs`, `mvcc.rs`, `snapshot.rs`, `lib.rs`) and sealed **10 contracts (`C1`–`C10`)** in `.ide/invariants.json` + `.ide/invariants.lock` (SHA-256).
+  2. **Mode 2 (`constrained`)**: Every patch was compiled and verified inside `.ide/shadow_worktree/` before promotion to the workspace.
+- **Verified Results**:
+  - **`cargo test --all-targets`**: **23/23 tests passing** (`wal_format`, `crash_recovery` at every byte offset, `mvcc_conflict`, `compaction_restart`).
+  - **`cargo clippy --all-targets -- -D warnings`**: **0 warnings, 0 errors**.
+  - **E2E Functional Stress Test**: `1,301` durable WAL ops with `fsync` in **430 ms**, simulated crash + atomic snapshot compaction in **21 ms**, 100% data verified after full restart.
+  - **Dogfooding**: `kv-wal-engine` is now integrated into `earnest-ide-core` (`/api/ide/kv_state`) for crash-safe IDE state persistence.
+
+---
+
 ## 📄 License
 
 Dual-licensed under either of:

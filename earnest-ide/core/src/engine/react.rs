@@ -645,28 +645,48 @@ impl<'a> ReActEngine<'a> {
             1. Avant de coder sur une technologie de niche, consulte 'kb_search'.\n\
             2. Examine scrupuleusement le code existant avec 'read_file' et 'list_files'.\n\
             3. En cas de bug, découverte ou piège résolu, transmets-le dans la base d'expérience via 'kb_propose'.\n\
-            4. Respecte strictement les règles du mode de gouvernance actif.{}\n",
+            4. Respecte strictement les règles du mode de gouvernance actif.\n\
+            5. Atlas projet : maintiens '.ide/atlas.md' (carte des modules, APIs publiques, décisions) aux jalons et consulte-le avec 'read_file' quand tu as besoin de contexte.{}\n",
             mode_desc,
             memory_context
         );
 
         let mut messages = vec![
             ChatMessage { role: "system".to_string(), content: system_prompt, images: None },
-            ChatMessage { role: "user".to_string(), content: prompt.to_string(), images: None },
         ];
+
+        // Injection de l'historique multi-tours récent (5 derniers runs réussis du projet)
+        if let Ok(mut stmt) = self.conn.prepare(
+            "SELECT prompt, final_answer FROM runs WHERE project_id = ?1 AND status = 'success' AND final_answer IS NOT NULL AND final_answer != '' ORDER BY created_at DESC LIMIT 5"
+        ) {
+            if let Ok(rows) = stmt.query_map(params![self.project_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            }) {
+                let mut history: Vec<(String, String)> = rows.filter_map(|r| r.ok()).collect();
+                history.reverse();
+                for (prev_prompt, prev_answer) in history {
+                    messages.push(ChatMessage { role: "user".to_string(), content: prev_prompt, images: None });
+                    messages.push(ChatMessage { role: "assistant".to_string(), content: prev_answer, images: None });
+                }
+            }
+        }
+
+        messages.push(ChatMessage { role: "user".to_string(), content: prompt.to_string(), images: None });
 
         let tools = self.get_tools_for_policy(&policy);
         let mut step_order = 1;
         let mut total_tokens = 0;
         let mut final_answer = String::new();
         let mut active_backend_name = String::new();
+        let mut context_budget_chars: usize = 120_000;
         let mut failure_counts: HashMap<String, usize> = HashMap::new();
 
         for _ in 0..self.max_steps {
-            compact_messages_if_needed(&mut messages, 36_000);
+            compact_messages_if_needed(&mut messages, context_budget_chars);
             let (chat_res, active_backend) = self.router.chat_completion_with_fallback(&messages, Some(&tools))?;
             if active_backend != active_backend_name {
-                println!("  🤖 [LLM] Backend actif : {}", active_backend);
+                context_budget_chars = self.router.estimate_context_chars(&active_backend);
+                println!("  🤖 [LLM] Backend actif : {} (budget contexte: {} chars)", active_backend, context_budget_chars);
             }
             active_backend_name = active_backend;
             total_tokens += chat_res.total_tokens;
@@ -902,7 +922,7 @@ fn compact_messages_if_needed(messages: &mut Vec<ChatMessage>, max_chars: usize)
     if total_chars <= max_chars || messages.len() <= 8 {
         return;
     }
-    let keep_tail = 6;
+    let keep_tail = 10;
     let split_idx = messages.len().saturating_sub(keep_tail);
     for msg in messages.iter_mut().take(split_idx).skip(2) {
         if msg.content.len() > 600 {

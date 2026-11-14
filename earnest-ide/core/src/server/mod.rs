@@ -1381,6 +1381,41 @@ Garde l'indentation appropriée.";
         }
 
         // --- GOUVERNANCE : CHANGEMENT DE MODE MANUEL ---
+        if path == "/api/ide/kv_state" {
+            let wal_path = std::path::Path::new(".ide").join("ide_state.wal");
+            if let Some(parent) = wal_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if req.method().as_str() == "GET" {
+                let key = req.url().split("key=").nth(1).unwrap_or("").split('&').next().unwrap_or("");
+                let key_decoded = urlencoding::decode(key).unwrap_or_default();
+                let resp = match kv_wal_engine::Engine::open(&wal_path) {
+                    Ok(engine) => {
+                        let val = engine.get(key_decoded.as_bytes()).map(|b| String::from_utf8_lossy(b).to_string());
+                        serde_json::json!({ "status": "ok", "key": key_decoded, "value": val })
+                    }
+                    Err(e) => serde_json::json!({ "status": "error", "error": e.to_string() }),
+                };
+                let _ = req.respond(tiny_http::Response::from_string(resp.to_string()).with_header(json_header));
+                return;
+            } else if req.method().as_str() == "POST" {
+                let mut body = String::new();
+                let _ = req.as_reader().read_to_string(&mut body);
+                let parsed: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
+                let key = parsed["key"].as_str().unwrap_or("");
+                let value = parsed["value"].as_str().unwrap_or("");
+                let resp = match kv_wal_engine::Engine::open(&wal_path) {
+                    Ok(mut engine) => match engine.put(key.as_bytes(), value.as_bytes()) {
+                        Ok(ts) => serde_json::json!({ "status": "ok", "key": key, "commit_ts": ts }),
+                        Err(e) => serde_json::json!({ "status": "error", "error": e.to_string() }),
+                    },
+                    Err(e) => serde_json::json!({ "status": "error", "error": e.to_string() }),
+                };
+                let _ = req.respond(tiny_http::Response::from_string(resp.to_string()).with_header(json_header));
+                return;
+            }
+        }
+
         if path == "/api/ide/governance/set_mode" {
             let root_str = payload["root"].as_str().unwrap_or(".");
             let mode_str = payload["mode"].as_str().unwrap_or("architecture");

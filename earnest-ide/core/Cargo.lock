@@ -378,6 +378,7 @@ dependencies = [
  "chrono",
  "clap",
  "ignore",
+ "kv-wal-engine",
  "regex",
  "reqwest",
  "rusqlite",
@@ -933,6 +934,10 @@ dependencies = [
  "futures-util",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "kv-wal-engine"
+version = "0.1.0"
 
 [[package]]
 name = "libc"
