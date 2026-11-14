@@ -729,7 +729,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    async function openFile(filePath) {
+    async function openFile(filePath, silent = false) {
         // Normaliser les antislashs pour Windows
         const normalizedPath = filePath.replace(/\\/g, '/');
         let existing = state.openTabs.find(t => t.path === normalizedPath || t.path.replace(/\\/g, '/') === normalizedPath);
@@ -758,7 +758,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 state.openTabs.push(existing);
             } catch (err) {
-                alert(`Read error: ${err.message}`);
+                if (!silent) alert(`Read error: ${err.message}`);
                 return;
             }
         }
@@ -1880,7 +1880,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = JSON.parse(raw);
             if (data.currentRoot) state.currentRoot = data.currentRoot;
             if (Array.isArray(data.openTabsPaths) && data.openTabsPaths.length > 0) {
-                for (const p of data.openTabsPaths) await openFile(p);
+                for (const p of data.openTabsPaths) await openFile(p, true);
                 if (data.activeTabPath) switchTab(data.activeTabPath);
                 return true;
             }
@@ -2672,7 +2672,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const hRes = await fetch(`/api/ide/history?project=${pParam}`);
             if (hRes.ok) {
                 const hData = await hRes.json();
-                const runs = hData.runs || [];
+                const runs = Array.isArray(hData) ? hData : (hData.runs || []);
                 if (runs.length > 0 && typeof restoreRunTraces === 'function') {
                     await restoreRunTraces(runs[0].id, runs[0].prompt);
                     restored = true;
