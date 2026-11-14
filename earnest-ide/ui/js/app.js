@@ -758,7 +758,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 state.openTabs.push(existing);
             } catch (err) {
-                alert(`Erreur lecture: ${err.message}`);
+                alert(`Read error: ${err.message}`);
                 return;
             }
         }
@@ -2560,10 +2560,19 @@ document.addEventListener('DOMContentLoaded', () => {
             state.projects = await res.json();
             renderProjectsModal();
             if (!state.currentProjectId && Array.isArray(state.projects)) {
-                const lastId = localStorage.getItem('earnest_last_project_id');
+                let lastId = localStorage.getItem('earnest_last_project_id');
+                if (!lastId) {
+                    try {
+                        const kvRes = await fetch('/api/ide/kv_state?key=earnest_last_project_id');
+                        if (kvRes.ok) {
+                            const kvData = await kvRes.json();
+                            if (kvData && kvData.value) lastId = kvData.value;
+                        }
+                    } catch (e) {}
+                }
                 const saved = lastId && state.projects.find(p => p.id === lastId || p.name === lastId);
                 if (saved) {
-                    switchProject(saved);
+                    await switchProject(saved);
                 }
             }
         } catch (e) { }
