@@ -2559,7 +2559,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/ide/projects');
             state.projects = await res.json();
             renderProjectsModal();
-            if (!state.currentProjectId && Array.isArray(state.projects)) {
+            if (!state.hasRestoredLastProject && Array.isArray(state.projects)) {
+                state.hasRestoredLastProject = true;
                 let lastId = localStorage.getItem('earnest_last_project_id');
                 if (!lastId) {
                     try {
