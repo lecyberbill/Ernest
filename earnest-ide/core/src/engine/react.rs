@@ -753,14 +753,14 @@ impl<'a> ReActEngine<'a> {
 
         if final_answer.is_empty() {
             final_answer = format!(
-                "⚠️ Limite de {} étapes atteinte sans réponse finale. Tu peux me demander de continuer.",
+                "⚠️ Reached max step limit ({}) without a final answer. You can ask me to continue.",
                 self.max_steps
             );
             self.record_trace(&run_id, step_order, "answer", None, &final_answer);
             on_trace(&run_id, step_order, "answer", None, &final_answer, &active_backend_name);
-            println!("  ⚠️ [GOUVERNANCE IDE] Limite max_steps ({}) atteinte ({}ms)", self.max_steps, duration_ms);
+            println!("  ⚠️ [IDE GOVERNANCE] Max steps limit ({}) reached ({}ms)", self.max_steps, duration_ms);
         } else {
-            println!("  ✅ [GOUVERNANCE IDE] Run terminé ({} étapes, {}ms)", step_order, duration_ms);
+            println!("  ✅ [IDE GOVERNANCE] Run completed ({} steps, {}ms)", step_order, duration_ms);
         }
 
         self.conn.execute(
