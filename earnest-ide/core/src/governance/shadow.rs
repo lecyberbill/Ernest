@@ -200,7 +200,7 @@ impl ShadowRunner {
                     duration_ms: start.elapsed().as_millis(),
                 }
             }
-            "cli_exec" | "cargo_test" => {
+            "cli_exec" | "cargo_test" | "cli" => {
                 let cmd_str = probe.command.as_deref().unwrap_or("echo ok");
                 #[cfg(target_os = "windows")]
                 let mut cmd = {

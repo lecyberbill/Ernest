@@ -55,7 +55,7 @@ impl<'a> ReActEngine<'a> {
             router,
             project_id: project_id.to_string(),
             workspace_root: ws_path,
-            max_steps: 30,
+            max_steps: 80,
         }
     }
 

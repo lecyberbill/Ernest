@@ -22,8 +22,19 @@
    - **Symptom**: `kb_search` / `kb_propose` failed with `os error 3` when launched from `earnest-ide/src-tauri`.
    - **Fix** (`earnest-ide/core/src/engine/react.rs`): Resolved `kb.exe` across `earnest-bcpe\target\release\kb.exe`, `..\...`, `..\..\...`, and `D:\Projet\Hernest\earnest-bcpe\target\release\kb.exe`.
 
+6. **Final Result (`kv-wal-engine`)**
+   - **Delivered**: Pure-Rust, zero-dependency transactional KV engine (`wal.rs`, `engine.rs`, `mvcc.rs`, `snapshot.rs`) built under strict Mode 3 → Mode 2 governance.
+   - **Verified**: `cargo test --all-targets` in `D:\Projet\kv-wal-engine` → **23/23 tests passing** (3 unit + 5 `wal_format` + 5 `crash_recovery` + 4 `mvcc_conflict` + 6 `compaction_restart`).
+   - **Additional Fixes**: Raised `max_steps` to `80` (`react.rs`), added `"cli"` runner alias (`shadow.rs`), added dynamic file-tree refresh (`loadTree()`), date+time and click-outside close on history dropdown (`app.js`).
+
 ## 2. Architectural Choice: IDE as "Guardian of the Temple"
 
 - **Principle**: The IDE deterministically enforces SHA-256 lock verification (`verify_invariants_lock`), sandbox isolation, and probe execution on every `write_code` call, returning `INTEGRITY_VIOLATION` immediately if anything is tampered with.
 - **Benefit**: The LLM does **not** need to waste tokens re-reading `.ide/invariants.lock`, `audit.log`, or `policy.json` on every turn; it can focus purely on architecture (Mode 3) and implementation (Mode 2).
+
+## 3. UI/UX & Session Persistence Todo
+- Persist last active project (`state.currentProjectName` / `state.currentRoot`) and last active run in `localStorage` so Earnest IDE reopens in the exact state it was closed.
+- Inject recent conversation history (`prompt` + `final_answer` of the last 5–6 `runs` for the project) into `messages` in `react.rs` so Earnest Copilote keeps multi-turn context without re-reading everything.
+- Fix `compact_messages_if_needed(&mut messages, 36_000)` in `react.rs`: `36_000` is too small and compresses recent `read_file` outputs, causing the LLM to re-read the same files in a loop. Raise the threshold (e.g. `120_000`) and preserve the last 6–8 tool outputs untouched.
+- Add project-local `.ide/atlas.md` (living architecture/API atlas): not injected into every prompt (keeps prompts light), just mentioned in 1 line so the LLM reads/updates it on demand via `read_file`/`write_file` and it is automatically removed if the project is deleted.
 

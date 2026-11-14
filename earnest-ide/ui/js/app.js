@@ -2406,6 +2406,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnToggleHistory = document.getElementById('btn-toggle-history');
     const agentHistoryPane = document.getElementById('agent-history-pane');
 
+    if (agentHistoryPane) {
+        document.addEventListener('click', (e) => {
+            if (agentHistoryPane.style.display !== 'none'
+                && !agentHistoryPane.contains(e.target)
+                && (!btnToggleHistory || !btnToggleHistory.contains(e.target))) {
+                agentHistoryPane.style.display = 'none';
+            }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && agentHistoryPane.style.display !== 'none') {
+                agentHistoryPane.style.display = 'none';
+            }
+        });
+    }
+
     async function loadAgentHistory() {
         if (!agentHistoryPane) return;
         agentHistoryPane.innerHTML = '<div style="color:var(--text-muted); padding:0.25rem;">Chargement historique...</div>';
@@ -2428,7 +2443,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 8px;">
                         <span style="color: var(--accent-cyan); font-weight: 600;">[${r.status}]</span> ${escapeHtml(r.prompt)}
                     </div>
-                    <span style="color: var(--text-muted); font-size: 0.65rem; flex-shrink: 0;">${r.created_at ? r.created_at.split(' ')[1] || r.created_at : ''}</span>
+                    <span style="color: var(--text-muted); font-size: 0.65rem; flex-shrink: 0;">${r.created_at || ''}</span>
                 `;
                 item.addEventListener('click', async () => {
                     await restoreRunTraces(r.id, r.prompt);
