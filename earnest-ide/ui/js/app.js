@@ -758,7 +758,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 state.openTabs.push(existing);
             } catch (err) {
-                if (!silent) alert(`Read error: ${err.message}`);
+                console.warn(`Read error: ${err.message}`);
                 return;
             }
         }
