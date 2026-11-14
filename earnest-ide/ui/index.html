@@ -1031,50 +1031,46 @@
                         <!-- Rendu par KbView JS -->
                     </div>
 
-                    <!-- Vue E : Préférences & Paramètres Modèles -->
+                    <!-- View E: Preferences & Model Settings -->
                     <div class="sidebar-view" id="view-settings">
                         <div class="tree-header">
-                            <span>CONFIGURATION & MODÈLES IA</span>
+                            <span>AI CONFIGURATION &amp; MODELS</span>
                         </div>
                         <div class="sidebar-body"
                             style="padding: 0.85rem; display: flex; flex-direction: column; gap: 1rem; font-family: var(--font-mono); font-size: 0.76rem; overflow-y: auto;">
-                            <!-- Section Modèle Actif -->
+                            <!-- Active Model Section -->
                             <div
                                 style="background: rgba(15, 23, 42, 0.6); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-subtle);">
                                 <label
-                                    style="display: block; color: var(--accent-cyan); margin-bottom: 0.4rem; font-weight: 700;">MODÈLE
-                                    PAR DÉFAUT (ACTIF)</label>
+                                    style="display: block; color: var(--accent-cyan); margin-bottom: 0.4rem; font-weight: 700;">DEFAULT MODEL (ACTIVE)</label>
                                 <select id="pref-default-model"
                                     style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 6px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.75rem;"></select>
                             </div>
 
-                            <!-- Section Liste des Fournisseurs / Modèles -->
+                            <!-- Providers / Models List -->
                             <div
                                 style="background: rgba(15, 23, 42, 0.6); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-subtle);">
                                 <div
                                     style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                    <label style="color: var(--text-primary); font-weight: 700;">FOURNISSEURS
-                                        CONFIGURÉS</label>
+                                    <label style="color: var(--text-primary); font-weight: 700;">CONFIGURED PROVIDERS</label>
                                     <button id="btn-toggle-add-model" class="icon-btn"
                                         style="border: 1px solid var(--accent-cyan); color: var(--accent-cyan); padding: 2px 6px; font-size: 0.7rem;">+
-                                        Nouveau</button>
+                                        New</button>
                                 </div>
                                 <div id="models-cards-list" style="display: flex; flex-direction: column; gap: 0.5rem;">
                                 </div>
 
-                                <!-- Formulaire Ajout / Édition d'un Fournisseur -->
+                                <!-- Add / Edit Provider Form -->
                                 <div id="model-form-pane"
                                     style="display: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed var(--border-subtle); flex-direction: column; gap: 0.45rem;">
                                     <input type="hidden" id="model-form-id" />
                                     <div>
-                                        <label style="color: var(--text-muted); font-size: 0.7rem;">Nom
-                                            convivial</label>
-                                        <input type="text" id="model-form-name" placeholder="ex: Mon Serveur Local"
+                                        <label style="color: var(--text-muted); font-size: 0.7rem;">Display Name</label>
+                                        <input type="text" id="model-form-name" placeholder="e.g. My Local Server"
                                             style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
                                     </div>
                                     <div>
-                                        <label style="color: var(--text-muted); font-size: 0.7rem;">Type de
-                                            protocole</label>
+                                        <label style="color: var(--text-muted); font-size: 0.7rem;">Protocol Type</label>
                                         <select id="model-form-type"
                                             style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;">
                                             <option value="openai">OpenAI Compatible (LM Studio, vLLM, DeepSeek,
@@ -1083,54 +1079,47 @@
                                         </select>
                                     </div>
                                     <div>
-                                        <label style="color: var(--text-muted); font-size: 0.7rem;">URL Endpoint (Base
-                                            URL)</label>
+                                        <label style="color: var(--text-muted); font-size: 0.7rem;">Endpoint URL (Base URL)</label>
                                         <input type="text" id="model-form-url"
-                                            placeholder="http://127.0.0.1:1234 ou https://api.deepseek.com"
+                                            placeholder="http://127.0.0.1:1234 or https://api.deepseek.com"
                                             style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
                                     </div>
                                     <div>
-                                        <label style="color: var(--text-muted); font-size: 0.7rem;">Identifiant
-                                            Modèle</label>
+                                        <label style="color: var(--text-muted); font-size: 0.7rem;">Model ID</label>
                                         <input type="text" id="model-form-model"
-                                            placeholder="ex: deepseek-chat, qwen2.5-coder:7b"
+                                            placeholder="e.g. deepseek-chat, qwen2.5-coder:7b"
                                             style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
                                     </div>
                                     <div>
-                                        <label style="color: var(--text-muted); font-size: 0.7rem;">Clé API (Token /
-                                            Secret)</label>
+                                        <label style="color: var(--text-muted); font-size: 0.7rem;">API Key (Token / Secret)</label>
                                         <input type="password" id="model-form-key"
-                                            placeholder="Optionnel (laisser vide si local)"
+                                            placeholder="Optional (leave empty if local)"
                                             style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; font-size: 0.75rem; border-radius: 4px;" />
                                     </div>
                                     <div style="display: flex; gap: 0.5rem; margin-top: 0.4rem;">
                                         <button id="btn-save-model-item" class="btn-primary"
-                                            style="flex: 1; padding: 4px; font-size: 0.72rem;">Sauvegarder
-                                            Modèle</button>
+                                            style="flex: 1; padding: 4px; font-size: 0.72rem;">Save Model</button>
                                         <button id="btn-cancel-model-item" class="icon-btn"
-                                            style="border: 1px solid var(--border-subtle); padding: 4px 8px; font-size: 0.72rem;">Annuler</button>
+                                            style="border: 1px solid var(--border-subtle); padding: 4px 8px; font-size: 0.72rem;">Cancel</button>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Section Interpréteur & Éditeur -->
+                            <!-- Runtime & Editor Section -->
                             <div
                                 style="background: rgba(15, 23, 42, 0.6); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 0.6rem;">
-                                <label style="color: var(--text-primary); font-weight: 700;">ENVIRONNEMENT
-                                    D'EXÉCUTION</label>
+                                <label style="color: var(--text-primary); font-weight: 700;">RUNTIME ENVIRONMENT</label>
                                 <div>
                                     <label
-                                        style="display: block; color: var(--text-secondary); margin-bottom: 0.25rem;">Interpréteur
-                                        Python</label>
+                                        style="display: block; color: var(--text-secondary); margin-bottom: 0.25rem;">Python Interpreter</label>
                                     <input type="text" id="pref-python-path"
-                                        placeholder="ex: python, D:\anaconda\python.exe"
+                                        placeholder="e.g. python, D:\anaconda\python.exe"
                                         style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.75rem;" />
                                 </div>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
                                     <div>
                                         <label
-                                            style="display: block; color: var(--text-secondary); margin-bottom: 0.25rem;">Police
-                                            Monaco</label>
+                                            style="display: block; color: var(--text-secondary); margin-bottom: 0.25rem;">Monaco Font</label>
                                         <input type="number" id="pref-editor-fontsize" value="13" min="10" max="28"
                                             style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.75rem;" />
                                     </div>
@@ -1139,8 +1128,8 @@
                                             style="display: block; color: var(--text-secondary); margin-bottom: 0.25rem;">Indentation</label>
                                         <select id="pref-editor-tabsize"
                                             style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid var(--border-subtle); color: #fff; padding: 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.75rem;">
-                                            <option value="4">4 espaces</option>
-                                            <option value="2">2 espaces</option>
+                                            <option value="4">4 spaces</option>
+                                            <option value="2">2 spaces</option>
                                         </select>
                                     </div>
                                 </div>
@@ -1154,10 +1143,10 @@
                                 </div>
                                 <button id="btn-save-preferences" class="btn-primary"
                                     style="padding: 0.45rem; font-size: 0.75rem; margin-top: 0.25rem;">
-                                    Appliquer les réglages
+                                    Apply Settings
                                 </button>
                                 <span id="pref-status-msg"
-                                    style="color: var(--accent-emerald); font-size: 0.7rem; text-align: center; display: none;">Préférences
+                                    style="color: var(--accent-emerald); font-size: 0.7rem; text-align: center; display: none;">Preferences
                                     enregistrées ✓</span>
                             </div>
                         </div>
@@ -1277,35 +1266,35 @@
                             <div class="bottom-panel-tabs">
                                 <button class="bottom-tab-btn active" id="btn-tab-term-1">Terminal 1</button>
                                 <button class="bottom-tab-btn" id="btn-tab-term-2">Terminal 2 (Build / Test)</button>
-                                <button class="bottom-tab-btn" id="btn-tab-problems">Problèmes & Linter</button>
+                                <button class="bottom-tab-btn" id="btn-tab-problems">Problems &amp; Linter</button>
                             </div>
                             <div style="display: flex; gap: 4px;">
                                 <button class="icon-btn" id="btn-clear-terminal"
-                                    style="font-size: 0.7rem;">Effacer</button>
+                                    style="font-size: 0.7rem;">Clear</button>
                                 <button class="icon-btn" id="btn-close-bottom">✕</button>
                             </div>
                         </div>
 
-                        <!-- Onglet Terminal 1 -->
+                        <!-- Terminal 1 Tab -->
                         <div class="bottom-content-pane active" id="pane-term-1">
-                            <div class="terminal-output" id="terminal-output-1">Earnest IDE Terminal 1 actif. Tapez vos
-                                commandes...
+                            <div class="terminal-output" id="terminal-output-1">Earnest IDE Terminal 1 active. Type your
+                                commands...
                             </div>
                             <div class="terminal-input-bar">
                                 <span class="terminal-prompt-sym">&gt;</span>
-                                <input type="text" id="terminal-input-1" placeholder="Exécuter une commande..."
+                                <input type="text" id="terminal-input-1" placeholder="Run a command..."
                                     spellcheck="false" autocomplete="off" />
                             </div>
                         </div>
 
-                        <!-- Onglet Terminal 2 -->
+                        <!-- Terminal 2 Tab -->
                         <div class="bottom-content-pane" id="pane-term-2">
                             <div class="terminal-output" id="terminal-output-2">Earnest IDE Terminal 2 (Second worker
-                                shell) actif.
+                                shell) active.
                             </div>
                             <div class="terminal-input-bar">
                                 <span class="terminal-prompt-sym">&gt;</span>
-                                <input type="text" id="terminal-input-2" placeholder="Exécuter dans le worker..."
+                                <input type="text" id="terminal-input-2" placeholder="Run in worker..."
                                     spellcheck="false" autocomplete="off" />
                             </div>
                         </div>
